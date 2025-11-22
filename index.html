@@ -340,6 +340,8 @@
          * CHARTING LOGIC
          */
         function initCharts() {
+            loadHistory();
+
             const commonOptions = {
                 responsive: true,
                 animation: false, // Performance optimization
@@ -374,7 +376,7 @@
                     data: { datasets: [{ label: 'Squat', data: [], borderColor: '#ff6384', tension: 0.1 }] },
                     options: {
                         ...commonOptions,
-                        scales: { y: { display: true, min: 40, max: 180 }, x: { display: false } } // Hide X axis on thumbnails
+                        scales: { y: { display: true, min: 40, max: 180 }, x: { display: true, type: 'linear', title: { display: true, text: 'Time (s)' } } }
                     }
                 }));
             });
@@ -396,20 +398,49 @@
         }
 
         function pushToHistory(data) {
-            // Shift data: Chart 3 gets 2, 2 gets 1, 1 gets New
-            
-            // Update Chart 3 (oldest)
-            historyCharts[2].data.datasets[0].data = historyCharts[1].data.datasets[0].data;
-            historyCharts[2].update();
+            const historyData = loadHistoryData() || [];
 
-            // Update Chart 2
-            historyCharts[1].data.datasets[0].data = historyCharts[0].data.datasets[0].data;
-            historyCharts[1].update();
+            // Add new data with a timestamp
+            historyData.unshift({
+                timestamp: new Date().toISOString(),
+                data: data
+            });
 
-            // Update Chart 1 (newest)
-            // Deep copy data to prevent reference issues
-            historyCharts[0].data.datasets[0].data = JSON.parse(JSON.stringify(data));
-            historyCharts[0].update();
+            // Keep only the last 3
+            if (historyData.length > 3) {
+                historyData.pop();
+            }
+
+            // Save to localStorage
+            saveHistoryData(historyData);
+
+            // Update charts
+            updateHistoryCharts(historyData);
+        }
+
+        function loadHistory() {
+            const historyData = loadHistoryData();
+            if (historyData) {
+                updateHistoryCharts(historyData);
+            }
+        }
+
+        function loadHistoryData() {
+            const jsonData = localStorage.getItem('squatHistory');
+            return jsonData ? JSON.parse(jsonData) : null;
+        }
+
+        function saveHistoryData(historyData) {
+            localStorage.setItem('squatHistory', JSON.stringify(historyData));
+        }
+
+        function updateHistoryCharts(historyData) {
+            for (let i = 0; i < historyCharts.length; i++) {
+                if (historyData[i]) {
+                    historyCharts[i].data.datasets[0].data = historyData[i].data;
+                    historyCharts[i].update();
+                }
+            }
         }
 
         /**
