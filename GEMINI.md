@@ -42,3 +42,9 @@ To run the project:
 
 *   **Code Style:** The code is written in plain JavaScript within a `<script>` tag in the `index.html` file. It is well-structured with clear sections for configuration, state management, initialization, the main loop, logic, and drawing helpers.
 *   **Dependencies:** All dependencies (`TensorFlow.js`, `PoseNet`, and `Chart.js`) are loaded from a CDN, so there are no local packages to manage.
+
+## Versioning
+
+The project version is manually tracked in this file and displayed in the top right corner of the application.
+
+**Current Version:** 1.0.1
