@@ -172,7 +172,8 @@
             startTime: 0,
             animationFrameId: null,
             videoStream: null,
-            posenetModel: null
+            posenetModel: null,
+            lastLogTime: 0
         };
 
         // Placeholder for chart instances
@@ -251,9 +252,23 @@
             async function poseDetectionFrame() {
                 if (!state.isDetecting) return;
 
-                const pose = await net.estimateSinglePose(video, {
+                if (video.readyState < 3) {
+                    state.animationFrameId = requestAnimationFrame(poseDetectionFrame);
+                    return;
+                }
+
+                ctx.drawImage(video, 0, 0, CONF.videoWidth, CONF.videoHeight);
+
+                const pose = await net.estimateSinglePose(ctx.canvas, {
                     flipHorizontal: false 
                 });
+
+                const now = Date.now();
+                if (now - state.lastLogTime > 2000) {
+                    console.log("Video readyState: ", video.readyState, " videoWidth: ", video.videoWidth, " videoHeight: ", video.videoHeight);
+                    console.log("Pose estimated: ", pose);
+                    state.lastLogTime = now;
+                }
 
                 ctx.clearRect(0, 0, CONF.videoWidth, CONF.videoHeight);
                 ctx.save();

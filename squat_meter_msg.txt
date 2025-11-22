@@ -1,0 +1,143 @@
+PoseNet Loaded
+(index):266 Video readyState:  4  videoWidth:  640  videoHeight:  480
+Pose estimated:  {
+    "score": 0.02590315942378605,
+    "keypoints": [
+        {
+            "score": 0.015502962283790112,
+            "part": "nose",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
+        },
+        {
+            "score": 0.04027700424194336,
+            "part": "leftEye",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
+        },
+        {
+            "score": 0.013315072283148766,
+            "part": "rightEye",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
+        },
+        {
+            "score": 0.02375040203332901,
+            "part": "leftEar",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
+        },
+        {
+            "score": 0.019200140610337257,
+            "part": "rightEar",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
+        },
+        {
+            "score": 0.032422952353954315,
+            "part": "leftShoulder",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
+        },
+        {
+            "score": 0.04043334349989891,
+            "part": "rightShoulder",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
+        },
+        {
+            "score": 0.03708745911717415,
+            "part": "leftElbow",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
+        },
+        {
+            "score": 0.018825499340891838,
+            "part": "rightElbow",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
+        },
+        {
+            "score": 0.013119606301188469,
+            "part": "leftWrist",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
+        },
+        {
+            "score": 0.014447757042944431,
+            "part": "rightWrist",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
+        },
+        {
+            "score": 0.03859976679086685,
+            "part": "leftHip",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
+        },
+        {
+            "score": 0.032782185822725296,
+            "part": "rightHip",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
+        },
+        {
+            "score": 0.028766777366399765,
+            "part": "leftKnee",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
+        },
+        {
+            "score": 0.028231151401996613,
+            "part": "rightKnee",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
+        },
+        {
+            "score": 0.021305078640580177,
+            "part": "leftAnkle",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
+        },
+        {
+            "score": 0.02228655107319355,
+            "part": "rightAnkle",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
+        }
+    ]
+}

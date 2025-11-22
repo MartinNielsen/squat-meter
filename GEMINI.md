@@ -42,6 +42,7 @@ To run the project:
 
 *   **Code Style:** The code is written in plain JavaScript within a `<script>` tag in the `index.html` file. It is well-structured with clear sections for configuration, state management, initialization, the main loop, logic, and drawing helpers.
 *   **Dependencies:** All dependencies (`TensorFlow.js`, `PoseNet`, and `Chart.js`) are loaded from a CDN, so there are no local packages to manage.
+*   **Git Operations:** The user will manually handle all Git operations, including adding, committing, and pushing changes. The agent should not attempt to perform these actions.
 
 ## Versioning
 
