@@ -227,11 +227,14 @@
          * MAIN LOOP
          */
         function detectPoseInRealTime(video, net, ctx) {
+            console.log("detectPoseInRealTime called");
             async function poseDetectionFrame() {
+                console.log("poseDetectionFrame called");
                 // 1. Estimate Pose
                 const pose = await net.estimateSinglePose(video, {
                     flipHorizontal: false // We flip via CSS, keeping data raw is often easier
                 });
+                console.log("Pose estimated: ", pose);
 
                 // 2. Draw Video & Skeleton
                 ctx.clearRect(0, 0, CONF.videoWidth, CONF.videoHeight);
@@ -256,6 +259,7 @@
          * LOGIC: Angle Calculation & Squat State Machine
          */
         function processPose(pose) {
+            console.log("processPose called");
             // Find keypoints: Hip, Knee, Ankle
             // We'll try Right side first, fallback to Left, or average. 
             // For simplicity in this view, let's use the side with higher confidence.
@@ -280,6 +284,7 @@
                 [hip, knee, ankle] = [leftHip, leftKnee, leftAnkle];
             } else {
                 // Not enough confidence to calculate
+                console.log("Not enough confidence to calculate pose");
                 return;
             }
 
@@ -460,6 +465,7 @@
          * DRAWING HELPERS (Standard PoseNet Utils)
          */
         function drawKeypoints(keypoints, minConfidence, ctx) {
+            console.log("drawKeypoints called");
             keypoints.forEach((keypoint) => {
                 if (keypoint.score >= minConfidence) {
                     const { y, x } = keypoint.position;
@@ -472,6 +478,7 @@
         }
 
         function drawSkeleton(keypoints, minConfidence, ctx) {
+            console.log("drawSkeleton called");
             const adjacentKeyPoints = posenet.getAdjacentKeyPoints(keypoints, minConfidence);
             adjacentKeyPoints.forEach((keypoints) => {
                 drawSegment(

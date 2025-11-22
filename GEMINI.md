@@ -46,5 +46,6 @@ To run the project:
 ## Versioning
 
 The project version is manually tracked in this file and displayed in the top right corner of the application.
+When you deem it likely that your changes and fixes should be deployed, also increment this version number accordingly. Don't worry about incrementing it without the changes being deployed.
 
 **Current Version:** 1.0.1
