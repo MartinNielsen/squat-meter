@@ -107,6 +107,8 @@
     <div class="version">v.1.0.1</div>
     <h1>Squat Angle Monitor v.1.0.1</h1>
     
+    <button id="startStopButton">Start</button>
+
     <!-- Live Viewer -->
     <div class="viewer-container">
         <div class="stats-overlay">
@@ -150,7 +152,7 @@
             videoWidth: 640,
             videoHeight: 480,
             flipHorizontal: true,
-            minConfidence: 0.5,
+            minConfidence: 0.2, // Lowered from 0.5
             // Squat logic thresholds (in degrees)
             standThresh: 165, // Angle considered "Standing"
             squatThresh: 140, // Angle considered starting a squat
@@ -161,96 +163,109 @@
          * STATE MANAGEMENT
          */
         let state = {
+            isDetecting: false,
             isSquatting: false,
             squatCount: 0,
             currentAngle: 180,
             // Buffer for the current squat data
             currentSquatData: [], 
-            startTime: 0
+            startTime: 0,
+            animationFrameId: null,
+            videoStream: null,
+            posenetModel: null
         };
 
         // Placeholder for chart instances
         let liveChart;
         const historyCharts = []; 
 
+        const startStopButton = document.getElementById('startStopButton');
+        startStopButton.onclick = toggleDetection;
+
         /**
          * INITIALIZATION
          */
         async function setup() {
-            // 1. Setup Charts
             initCharts();
-
-            // 2. Setup Camera
-            const video = document.getElementById('video');
-            const stream = await navigator.mediaDevices.getUserMedia({
-                'audio': false,
-                'video': {
-                    width: CONF.videoWidth,
-                    height: CONF.videoHeight,
-                    facingMode: 'user'
-                }
-            });
-            video.srcObject = stream;
-
-            return new Promise((resolve) => {
-                video.onloadedmetadata = () => {
-                    // Update CONF with actual video dimensions
-                    CONF.videoWidth = video.videoWidth;
-                    CONF.videoHeight = video.videoHeight;
-                    resolve(video);
-                };
-            });
-        }
-
-        async function main() {
-            const video = await setup();
-            const canvas = document.getElementById('output');
-            const ctx = canvas.getContext('2d');
-
-            canvas.width = CONF.videoWidth;
-            canvas.height = CONF.videoHeight;
-
-            // Load PoseNet
             console.log("Loading PoseNet...");
-            const net = await posenet.load({
+            state.posenetModel = await posenet.load({
                 architecture: 'MobileNetV1',
                 outputStride: 16,
                 inputResolution: { width: 500, height: 500 },
                 multiplier: 0.75
             });
             console.log("PoseNet Loaded");
-
-            detectPoseInRealTime(video, net, ctx);
         }
 
+        async function toggleDetection() {
+            if (state.isDetecting) {
+                // Stop detection
+                state.isDetecting = false;
+                startStopButton.innerText = 'Start';
+                if (state.animationFrameId) {
+                    cancelAnimationFrame(state.animationFrameId);
+                }
+                if (state.videoStream) {
+                    state.videoStream.getTracks().forEach(track => track.stop());
+                }
+                const canvas = document.getElementById('output');
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            } else {
+                // Start detection
+                state.isDetecting = true;
+                startStopButton.innerText = 'Stop';
+                const video = document.getElementById('video');
+                try {
+                    state.videoStream = await navigator.mediaDevices.getUserMedia({
+                        'audio': false,
+                        'video': {
+                            width: CONF.videoWidth,
+                            height: CONF.videoHeight,
+                            facingMode: 'user'
+                        }
+                    });
+                    video.srcObject = state.videoStream;
+
+                    video.onloadedmetadata = () => {
+                        CONF.videoWidth = video.videoWidth;
+                        CONF.videoHeight = video.videoHeight;
+                        const canvas = document.getElementById('output');
+                        const ctx = canvas.getContext('2d');
+                        canvas.width = CONF.videoWidth;
+                        canvas.height = CONF.videoHeight;
+                        detectPoseInRealTime(video, state.posenetModel, ctx);
+                    };
+                } catch (e) {
+                    console.error("Error starting video stream:", e);
+                    state.isDetecting = false;
+                    startStopButton.innerText = 'Start';
+                }
+            }
+        }
+        
         /**
          * MAIN LOOP
          */
         function detectPoseInRealTime(video, net, ctx) {
-            console.log("detectPoseInRealTime called");
             async function poseDetectionFrame() {
-                console.log("poseDetectionFrame called");
-                // 1. Estimate Pose
-                const pose = await net.estimateSinglePose(video, {
-                    flipHorizontal: false // We flip via CSS, keeping data raw is often easier
-                });
-                console.log("Pose estimated: ", pose);
+                if (!state.isDetecting) return;
 
-                // 2. Draw Video & Skeleton
+                const pose = await net.estimateSinglePose(video, {
+                    flipHorizontal: false 
+                });
+
                 ctx.clearRect(0, 0, CONF.videoWidth, CONF.videoHeight);
                 ctx.save();
-                // if we want to draw video on canvas
                 ctx.drawImage(video, 0, 0, CONF.videoWidth, CONF.videoHeight);
                 
-                drawKeypoints(pose.keypoints, 0.5, ctx);
-                drawSkeleton(pose.keypoints, 0.5, ctx);
+                drawKeypoints(pose.keypoints, CONF.minConfidence, ctx);
+                drawSkeleton(pose.keypoints, CONF.minConfidence, ctx);
                 ctx.restore();
 
-                // 3. Calculate Mechanics
                 processPose(pose);
 
-                // 4. Loop
-                requestAnimationFrame(poseDetectionFrame);
+                state.animationFrameId = requestAnimationFrame(poseDetectionFrame);
             }
             poseDetectionFrame();
         }
@@ -259,11 +274,6 @@
          * LOGIC: Angle Calculation & Squat State Machine
          */
         function processPose(pose) {
-            console.log("processPose called");
-            // Find keypoints: Hip, Knee, Ankle
-            // We'll try Right side first, fallback to Left, or average. 
-            // For simplicity in this view, let's use the side with higher confidence.
-            
             const rightHip = pose.keypoints.find(k => k.part === 'rightHip');
             const rightKnee = pose.keypoints.find(k => k.part === 'rightKnee');
             const rightAnkle = pose.keypoints.find(k => k.part === 'rightAnkle');
@@ -272,7 +282,6 @@
             const leftKnee = pose.keypoints.find(k => k.part === 'leftKnee');
             const leftAnkle = pose.keypoints.find(k => k.part === 'leftAnkle');
 
-            // Determine which leg is more visible
             const rightConf = (rightHip.score + rightKnee.score + rightAnkle.score) / 3;
             const leftConf = (leftHip.score + leftKnee.score + leftAnkle.score) / 3;
 
@@ -283,55 +292,39 @@
             } else if (leftConf > CONF.minConfidence) {
                 [hip, knee, ankle] = [leftHip, leftKnee, leftAnkle];
             } else {
-                // Not enough confidence to calculate
-                console.log("Not enough confidence to calculate pose");
                 return;
             }
 
-            // Calculate Angle
             const angle = calculateAngle(hip.position, knee.position, ankle.position);
             state.currentAngle = Math.round(angle);
 
-            // Update UI Overlay
             document.getElementById('angleDisplay').innerText = state.currentAngle;
             document.getElementById('angleDisplay').style.color = state.currentAngle < CONF.deepThresh ? '#00ff00' : '#00ffcc';
 
-            // State Machine
             const now = Date.now();
 
-            // Logic: 
-            // 1. If standing and angle drops -> Start Squat
-            // 2. If squatting -> Record Data
-            // 3. If squatting and angle goes back up -> End Squat
-
             if (!state.isSquatting) {
-                // Check for start
                 if (angle < CONF.squatThresh) {
                     state.isSquatting = true;
                     state.startTime = now;
-                    state.currentSquatData = []; // Reset data
+                    state.currentSquatData = []; 
                     document.getElementById('statusDisplay').innerText = "Squatting...";
-                    // Clear live chart
                     resetLiveChart();
                 }
             }
 
             if (state.isSquatting) {
-                // Record data point
-                const timeOffset = (now - state.startTime) / 1000; // seconds
+                const timeOffset = (now - state.startTime) / 1000;
                 state.currentSquatData.push({ x: timeOffset, y: Math.round(angle) });
                 
-                // Update Live Chart
                 updateLiveChart(timeOffset, Math.round(angle));
 
-                // Check for end
                 if (angle > CONF.standThresh) {
                     state.isSquatting = false;
                     state.squatCount++;
                     document.getElementById('statusDisplay').innerText = "Standing";
                     document.getElementById('countDisplay').innerText = state.squatCount;
                     
-                    // Squat finished: Push to history graphs
                     pushToHistory(state.currentSquatData);
                 }
             }
@@ -341,16 +334,13 @@
          * MATH: Calculate angle between three points (A-B-C)
          */
         function calculateAngle(a, b, c) {
-            // atan2 returns angle in radians
             const AB = Math.sqrt(Math.pow(b.x - a.x, 2) + Math.pow(b.y - a.y, 2));
             const BC = Math.sqrt(Math.pow(b.x - c.x, 2) + Math.pow(b.y - c.y, 2));
             const AC = Math.sqrt(Math.pow(c.x - a.x, 2) + Math.pow(c.y - a.y, 2));
             
-            // Law of Cosines
             let radian = Math.acos((BC*BC+AB*AB-AC*AC)/(2*BC*AB));
             let degree = (radian * 180) / Math.PI;
             
-            // For legs, 180 is straight. 
             return degree; 
         }
 
@@ -362,7 +352,7 @@
 
             const commonOptions = {
                 responsive: true,
-                animation: false, // Performance optimization
+                animation: false, 
                 scales: {
                     y: { 
                         beginAtZero: false, 
@@ -377,7 +367,6 @@
                 plugins: { legend: { display: false } }
             };
 
-            // Live Chart
             const ctxLive = document.getElementById('liveChart').getContext('2d');
             liveChart = new Chart(ctxLive, {
                 type: 'line',
@@ -385,7 +374,6 @@
                 options: commonOptions
             });
 
-            // History Charts (3 of them)
             const ids = ['histChart1', 'histChart2', 'histChart3'];
             ids.forEach(id => {
                 const ctx = document.getElementById(id).getContext('2d');
@@ -401,13 +389,11 @@
         }
 
         function updateLiveChart(time, angle) {
-            // Add data
             liveChart.data.datasets[0].data.push({x: time, y: angle});
-            // Limit live chart to avoid memory leak if squat is super long
             if(liveChart.data.datasets[0].data.length > 300) {
                 liveChart.data.datasets[0].data.shift();
             }
-            liveChart.update('none'); // 'none' mode is faster
+            liveChart.update('none'); 
         }
 
         function resetLiveChart() {
@@ -418,21 +404,16 @@
         function pushToHistory(data) {
             const historyData = loadHistoryData() || [];
 
-            // Add new data with a timestamp
             historyData.unshift({
                 timestamp: new Date().toISOString(),
                 data: data
             });
 
-            // Keep only the last 3
             if (historyData.length > 3) {
                 historyData.pop();
             }
 
-            // Save to localStorage
             saveHistoryData(historyData);
-
-            // Update charts
             updateHistoryCharts(historyData);
         }
 
@@ -465,7 +446,6 @@
          * DRAWING HELPERS (Standard PoseNet Utils)
          */
         function drawKeypoints(keypoints, minConfidence, ctx) {
-            console.log("drawKeypoints called");
             keypoints.forEach((keypoint) => {
                 if (keypoint.score >= minConfidence) {
                     const { y, x } = keypoint.position;
@@ -478,7 +458,6 @@
         }
 
         function drawSkeleton(keypoints, minConfidence, ctx) {
-            console.log("drawSkeleton called");
             const adjacentKeyPoints = posenet.getAdjacentKeyPoints(keypoints, minConfidence);
             adjacentKeyPoints.forEach((keypoints) => {
                 drawSegment(
@@ -502,7 +481,7 @@
         }
 
         // Start App
-        main();
+        setup();
 
     </script>
     <script>
