@@ -130,15 +130,15 @@
         <!-- History graphs -->
         <div class="history-grid">
             <div class="chart-card">
-                <h4>Last Squat - 3</h4>
+                <h4 id="histChart3Title">Last Squat - 3</h4>
                 <canvas id="histChart3"></canvas>
             </div>
             <div class="chart-card">
-                <h4>Last Squat - 2</h4>
+                <h4 id="histChart2Title">Last Squat - 2</h4>
                 <canvas id="histChart2"></canvas>
             </div>
             <div class="chart-card">
-                <h4>Last Squat - 1 (Most Recent)</h4>
+                <h4 id="histChart1Title">Last Squat - 1 (Most Recent)</h4>
                 <canvas id="histChart1"></canvas>
             </div>
         </div>
@@ -257,9 +257,11 @@
                     return;
                 }
 
-                ctx.drawImage(video, 0, 0, CONF.videoWidth, CONF.videoHeight);
+                ctx.clearRect(0, 0, CONF.videoWidth, CONF.videoHeight);
+                ctx.save();
+                ctx.drawImage(video, 0, 0, CONF.videoWidth, CONF.videoHeight); // Draw video frame to canvas
 
-                const pose = await net.estimateSinglePose(ctx.canvas, {
+                const pose = await net.estimateSinglePose(video, {
                     flipHorizontal: false 
                 });
 
@@ -269,10 +271,6 @@
                     console.log("Pose estimated: ", pose);
                     state.lastLogTime = now;
                 }
-
-                ctx.clearRect(0, 0, CONF.videoWidth, CONF.videoHeight);
-                ctx.save();
-                ctx.drawImage(video, 0, 0, CONF.videoWidth, CONF.videoHeight);
                 
                 drawKeypoints(pose.keypoints, CONF.minConfidence, ctx);
                 drawSkeleton(pose.keypoints, CONF.minConfidence, ctx);
@@ -371,7 +369,8 @@
                 scales: {
                     y: { 
                         beginAtZero: false, 
-                        min: 40, max: 180,
+                        min: 0, // Changed from 40 to 0
+                        max: 170, // Changed from 180 to 170
                         title: { display: true, text: 'Angle (Degrees)' }
                     },
                     x: {
@@ -390,14 +389,15 @@
             });
 
             const ids = ['histChart1', 'histChart2', 'histChart3'];
-            ids.forEach(id => {
+            const titleIds = ['histChart1Title', 'histChart2Title', 'histChart3Title'];
+            ids.forEach((id, index) => {
                 const ctx = document.getElementById(id).getContext('2d');
                 historyCharts.push(new Chart(ctx, {
                     type: 'line',
                     data: { datasets: [{ label: 'Squat', data: [], borderColor: '#ff6384', tension: 0.1 }] },
                     options: {
                         ...commonOptions,
-                        scales: { y: { display: true, min: 40, max: 180 }, x: { display: true, type: 'linear', title: { display: true, text: 'Time (s)' } } }
+                        scales: { y: { display: true, min: 0, max: 170 }, x: { display: true, type: 'linear', title: { display: true, text: 'Time (s)' } } }
                     }
                 }));
             });
@@ -449,12 +449,21 @@
         }
 
         function updateHistoryCharts(historyData) {
-            for (let i = 0; i < historyCharts.length; i++) {
+            const titleIds = ['histChart1Title', 'histChart2Title', 'histChart3Title'];
+            historyCharts.forEach((chart, i) => {
                 if (historyData[i]) {
-                    historyCharts[i].data.datasets[0].data = historyData[i].data;
-                    historyCharts[i].update();
+                    const date = new Date(historyData[i].timestamp);
+                    const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+                    document.getElementById(titleIds[i]).innerText = `Squat - ${formattedDate}`;
+                    chart.data.datasets[0].data = historyData[i].data;
+                    chart.update();
+                } else {
+                    // Clear chart and reset title if no data
+                    document.getElementById(titleIds[i]).innerText = `Last Squat - ${3 - i}`;
+                    chart.data.datasets[0].data = [];
+                    chart.update();
                 }
-            }
+            });
         }
 
         /**
