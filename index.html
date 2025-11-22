@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Squat Monitor - PoseNet</title>
+    
+    <!-- Load TensorFlow.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <!-- Load Posenet -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
+    <!-- Load Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 { margin-bottom: 10px; }
+
+        /* Container for the live view */
+        .viewer-container {
+            position: relative;
+            width: 640px;
+            height: 480px;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        video {
+            position: absolute;
+            top: 0; left: 0;
+            transform: scaleX(-1); /* Mirror the video */
+            display: none; /* Hidden, we draw to canvas */
+        }
+
+        canvas#output {
+            position: absolute;
+            top: 0; left: 0;
+            transform: scaleX(-1); /* Mirror the canvas to match interaction */
+        }
+
+        .stats-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #00ffcc;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 18px;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        /* Layout for charts */
+        .charts-wrapper {
+            width: 100%;
+            max-width: 1000px;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        .chart-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .history-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        @media (max-width: 800px) {
+            .viewer-container { width: 100%; height: auto; aspect-ratio: 4/3; }
+            canvas#output { width: 100%; height: 100%; }
+            .history-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Squat Angle Monitor</h1>
+    
+    <!-- Live Viewer -->
+    <div class="viewer-container">
+        <div class="stats-overlay">
+            <div>Knee Angle: <span id="angleDisplay">0</span>°</div>
+            <div>Status: <span id="statusDisplay">Standing</span></div>
+            <div>Squats: <span id="countDisplay">0</span></div>
+        </div>
+        <video id="video" width="640" height="480" autoplay playsinline></video>
+        <canvas id="output"></canvas>
+    </div>
+
+    <div class="charts-wrapper">
+        <!-- Real-time graph for current squat -->
+        <div class="chart-card">
+            <h3>Current / Live Squat</h3>
+            <canvas id="liveChart"></canvas>
+        </div>
+
+        <!-- History graphs -->
+        <div class="history-grid">
+            <div class="chart-card">
+                <h4>Last Squat - 3</h4>
+                <canvas id="histChart3"></canvas>
+            </div>
+            <div class="chart-card">
+                <h4>Last Squat - 2</h4>
+                <canvas id="histChart2"></canvas>
+            </div>
+            <div class="chart-card">
+                <h4>Last Squat - 1 (Most Recent)</h4>
+                <canvas id="histChart1"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * APP CONFIGURATION
+         */
+        const CONF = {
+            videoWidth: 640,
+            videoHeight: 480,
+            flipHorizontal: true,
+            minConfidence: 0.5,
+            // Squat logic thresholds (in degrees)
+            standThresh: 165, // Angle considered "Standing"
+            squatThresh: 140, // Angle considered starting a squat
+            deepThresh: 100,  // Just for visual feedback on deep squats
+        };
+
+        /**
+         * STATE MANAGEMENT
+         */
+        let state = {
+            isSquatting: false,
+            squatCount: 0,
+            currentAngle: 180,
+            // Buffer for the current squat data
+            currentSquatData: [], 
+            startTime: 0
+        };
+
+        // Placeholder for chart instances
+        let liveChart;
+        const historyCharts = []; 
+
+        /**
+         * INITIALIZATION
+         */
+        async function setup() {
+            // 1. Setup Charts
+            initCharts();
+
+            // 2. Setup Camera
+            const video = document.getElementById('video');
+            const stream = await navigator.mediaDevices.getUserMedia({
+                'audio': false,
+                'video': {
+                    width: CONF.videoWidth,
+                    height: CONF.videoHeight,
+                    facingMode: 'user'
+                }
+            });
+            video.srcObject = stream;
+
+            return new Promise((resolve) => {
+                video.onloadedmetadata = () => {
+                    resolve(video);
+                };
+            });
+        }
+
+        async function main() {
+            const video = await setup();
+            const canvas = document.getElementById('output');
+            const ctx = canvas.getContext('2d');
+
+            canvas.width = CONF.videoWidth;
+            canvas.height = CONF.videoHeight;
+
+            // Load PoseNet
+            console.log("Loading PoseNet...");
+            const net = await posenet.load({
+                architecture: 'MobileNetV1',
+                outputStride: 16,
+                inputResolution: { width: 500, height: 500 },
+                multiplier: 0.75
+            });
+            console.log("PoseNet Loaded");
+
+            detectPoseInRealTime(video, net, ctx);
+        }
+
+        /**
+         * MAIN LOOP
+         */
+        function detectPoseInRealTime(video, net, ctx) {
+            async function poseDetectionFrame() {
+                // 1. Estimate Pose
+                const pose = await net.estimateSinglePose(video, {
+                    flipHorizontal: false // We flip via CSS, keeping data raw is often easier
+                });
+
+                // 2. Draw Video & Skeleton
+                ctx.clearRect(0, 0, CONF.videoWidth, CONF.videoHeight);
+                ctx.save();
+                // if we want to draw video on canvas
+                ctx.drawImage(video, 0, 0, CONF.videoWidth, CONF.videoHeight);
+                
+                drawKeypoints(pose.keypoints, 0.5, ctx);
+                drawSkeleton(pose.keypoints, 0.5, ctx);
+                ctx.restore();
+
+                // 3. Calculate Mechanics
+                processPose(pose);
+
+                // 4. Loop
+                requestAnimationFrame(poseDetectionFrame);
+            }
+            poseDetectionFrame();
+        }
+
+        /**
+         * LOGIC: Angle Calculation & Squat State Machine
+         */
+        function processPose(pose) {
+            // Find keypoints: Hip, Knee, Ankle
+            // We'll try Right side first, fallback to Left, or average. 
+            // For simplicity in this view, let's use the side with higher confidence.
+            
+            const rightHip = pose.keypoints.find(k => k.part === 'rightHip');
+            const rightKnee = pose.keypoints.find(k => k.part === 'rightKnee');
+            const rightAnkle = pose.keypoints.find(k => k.part === 'rightAnkle');
+            
+            const leftHip = pose.keypoints.find(k => k.part === 'leftHip');
+            const leftKnee = pose.keypoints.find(k => k.part === 'leftKnee');
+            const leftAnkle = pose.keypoints.find(k => k.part === 'leftAnkle');
+
+            // Determine which leg is more visible
+            const rightConf = (rightHip.score + rightKnee.score + rightAnkle.score) / 3;
+            const leftConf = (leftHip.score + leftKnee.score + leftAnkle.score) / 3;
+
+            let hip, knee, ankle;
+
+            if (rightConf > leftConf && rightConf > CONF.minConfidence) {
+                [hip, knee, ankle] = [rightHip, rightKnee, rightAnkle];
+            } else if (leftConf > CONF.minConfidence) {
+                [hip, knee, ankle] = [leftHip, leftKnee, leftAnkle];
+            } else {
+                // Not enough confidence to calculate
+                return;
+            }
+
+            // Calculate Angle
+            const angle = calculateAngle(hip.position, knee.position, ankle.position);
+            state.currentAngle = Math.round(angle);
+
+            // Update UI Overlay
+            document.getElementById('angleDisplay').innerText = state.currentAngle;
+            document.getElementById('angleDisplay').style.color = state.currentAngle < CONF.deepThresh ? '#00ff00' : '#00ffcc';
+
+            // State Machine
+            const now = Date.now();
+
+            // Logic: 
+            // 1. If standing and angle drops -> Start Squat
+            // 2. If squatting -> Record Data
+            // 3. If squatting and angle goes back up -> End Squat
+
+            if (!state.isSquatting) {
+                // Check for start
+                if (angle < CONF.squatThresh) {
+                    state.isSquatting = true;
+                    state.startTime = now;
+                    state.currentSquatData = []; // Reset data
+                    document.getElementById('statusDisplay').innerText = "Squatting...";
+                    // Clear live chart
+                    resetLiveChart();
+                }
+            }
+
+            if (state.isSquatting) {
+                // Record data point
+                const timeOffset = (now - state.startTime) / 1000; // seconds
+                state.currentSquatData.push({ x: timeOffset, y: Math.round(angle) });
+                
+                // Update Live Chart
+                updateLiveChart(timeOffset, Math.round(angle));
+
+                // Check for end
+                if (angle > CONF.standThresh) {
+                    state.isSquatting = false;
+                    state.squatCount++;
+                    document.getElementById('statusDisplay').innerText = "Standing";
+                    document.getElementById('countDisplay').innerText = state.squatCount;
+                    
+                    // Squat finished: Push to history graphs
+                    pushToHistory(state.currentSquatData);
+                }
+            }
+        }
+
+        /**
+         * MATH: Calculate angle between three points (A-B-C)
+         */
+        function calculateAngle(a, b, c) {
+            // atan2 returns angle in radians
+            const AB = Math.sqrt(Math.pow(b.x - a.x, 2) + Math.pow(b.y - a.y, 2));
+            const BC = Math.sqrt(Math.pow(b.x - c.x, 2) + Math.pow(b.y - c.y, 2));
+            const AC = Math.sqrt(Math.pow(c.x - a.x, 2) + Math.pow(c.y - a.y, 2));
+            
+            // Law of Cosines
+            let radian = Math.acos((BC*BC+AB*AB-AC*AC)/(2*BC*AB));
+            let degree = (radian * 180) / Math.PI;
+            
+            // For legs, 180 is straight. 
+            return degree; 
+        }
+
+        /**
+         * CHARTING LOGIC
+         */
+        function initCharts() {
+            const commonOptions = {
+                responsive: true,
+                animation: false, // Performance optimization
+                scales: {
+                    y: { 
+                        beginAtZero: false, 
+                        min: 40, max: 180,
+                        title: { display: true, text: 'Angle (Degrees)' }
+                    },
+                    x: {
+                        type: 'linear',
+                        title: { display: true, text: 'Time (s)' }
+                    }
+                },
+                plugins: { legend: { display: false } }
+            };
+
+            // Live Chart
+            const ctxLive = document.getElementById('liveChart').getContext('2d');
+            liveChart = new Chart(ctxLive, {
+                type: 'line',
+                data: { datasets: [{ label: 'Live Angle', data: [], borderColor: 'rgb(75, 192, 192)', tension: 0.1 }] },
+                options: commonOptions
+            });
+
+            // History Charts (3 of them)
+            const ids = ['histChart1', 'histChart2', 'histChart3'];
+            ids.forEach(id => {
+                const ctx = document.getElementById(id).getContext('2d');
+                historyCharts.push(new Chart(ctx, {
+                    type: 'line',
+                    data: { datasets: [{ label: 'Squat', data: [], borderColor: '#ff6384', tension: 0.1 }] },
+                    options: {
+                        ...commonOptions,
+                        scales: { y: { display: true, min: 40, max: 180 }, x: { display: false } } // Hide X axis on thumbnails
+                    }
+                }));
+            });
+        }
+
+        function updateLiveChart(time, angle) {
+            // Add data
+            liveChart.data.datasets[0].data.push({x: time, y: angle});
+            // Limit live chart to avoid memory leak if squat is super long
+            if(liveChart.data.datasets[0].data.length > 300) {
+                liveChart.data.datasets[0].data.shift();
+            }
+            liveChart.update('none'); // 'none' mode is faster
+        }
+
+        function resetLiveChart() {
+            liveChart.data.datasets[0].data = [];
+            liveChart.update();
+        }
+
+        function pushToHistory(data) {
+            // Shift data: Chart 3 gets 2, 2 gets 1, 1 gets New
+            
+            // Update Chart 3 (oldest)
+            historyCharts[2].data.datasets[0].data = historyCharts[1].data.datasets[0].data;
+            historyCharts[2].update();
+
+            // Update Chart 2
+            historyCharts[1].data.datasets[0].data = historyCharts[0].data.datasets[0].data;
+            historyCharts[1].update();
+
+            // Update Chart 1 (newest)
+            // Deep copy data to prevent reference issues
+            historyCharts[0].data.datasets[0].data = JSON.parse(JSON.stringify(data));
+            historyCharts[0].update();
+        }
+
+        /**
+         * DRAWING HELPERS (Standard PoseNet Utils)
+         */
+        function drawKeypoints(keypoints, minConfidence, ctx) {
+            keypoints.forEach((keypoint) => {
+                if (keypoint.score >= minConfidence) {
+                    const { y, x } = keypoint.position;
+                    ctx.beginPath();
+                    ctx.arc(x, y, 5, 0, 2 * Math.PI);
+                    ctx.fillStyle = '#00ffcc';
+                    ctx.fill();
+                }
+            });
+        }
+
+        function drawSkeleton(keypoints, minConfidence, ctx) {
+            const adjacentKeyPoints = posenet.getAdjacentKeyPoints(keypoints, minConfidence);
+            adjacentKeyPoints.forEach((keypoints) => {
+                drawSegment(
+                    toTuple(keypoints[0].position), 
+                    toTuple(keypoints[1].position), 
+                    '#00ffcc', 
+                    ctx
+                );
+            });
+        }
+
+        function toTuple({ y, x }) { return [y, x]; }
+
+        function drawSegment([ay, ax], [by, bx], color, ctx) {
+            ctx.beginPath();
+            ctx.moveTo(ax, ay);
+            ctx.lineTo(bx, by);
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = color;
+            ctx.stroke();
+        }
+
+        // Start App
+        main();
+
+    </script>
+</body>
+</html>
