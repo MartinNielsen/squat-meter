@@ -257,10 +257,6 @@
                     return;
                 }
 
-                ctx.clearRect(0, 0, CONF.videoWidth, CONF.videoHeight);
-                ctx.save();
-                ctx.drawImage(video, 0, 0, CONF.videoWidth, CONF.videoHeight); // Draw video frame to canvas
-
                 const pose = await net.estimateSinglePose(video, {
                     flipHorizontal: false 
                 });
@@ -271,6 +267,10 @@
                     console.log("Pose estimated: ", pose);
                     state.lastLogTime = now;
                 }
+
+                ctx.clearRect(0, 0, CONF.videoWidth, CONF.videoHeight);
+                ctx.save();
+                ctx.drawImage(video, 0, 0, CONF.videoWidth, CONF.videoHeight);
                 
                 drawKeypoints(pose.keypoints, CONF.minConfidence, ctx);
                 drawSkeleton(pose.keypoints, CONF.minConfidence, ctx);
@@ -389,8 +389,7 @@
             });
 
             const ids = ['histChart1', 'histChart2', 'histChart3'];
-            const titleIds = ['histChart1Title', 'histChart2Title', 'histChart3Title'];
-            ids.forEach((id, index) => {
+            ids.forEach((id) => {
                 const ctx = document.getElementById(id).getContext('2d');
                 historyCharts.push(new Chart(ctx, {
                     type: 'line',
@@ -459,7 +458,7 @@
                     chart.update();
                 } else {
                     // Clear chart and reset title if no data
-                    document.getElementById(titleIds[i]).innerText = `Last Squat - ${3 - i}`;
+                    document.getElementById(titleIds[i]).innerText = `Last Squat - ${i+1}`;
                     chart.data.datasets[0].data = [];
                     chart.update();
                 }
