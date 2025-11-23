@@ -486,6 +486,15 @@
                 instructionScreen.classList.add('hidden');
                 stopOverlay.classList.remove('hidden');
                 statsOverlay.classList.remove('hidden');
+                
+                // Scroll to position viewer container just below the header
+                const headerContainer = document.querySelector('.header-container');
+                const headerBottom = headerContainer.offsetTop + headerContainer.offsetHeight;
+                window.scrollTo({
+                    top: headerBottom,
+                    behavior: 'smooth'
+                });
+                
                 const video = document.getElementById('video');
                 try {
                     state.videoStream = await navigator.mediaDevices.getUserMedia({
