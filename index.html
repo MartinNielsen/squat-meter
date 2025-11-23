@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="manifest.json">
-    <title>Squat Monitor - PoseNet</title>
+    <title>Squat Monitor - MoveNet</title>
     
     <!-- Load TensorFlow.js -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <!-- Load Posenet -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
+    <!-- Load MoveNet -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
     <!-- Load Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -46,7 +46,6 @@
             left: 0;
             width: 100%;
             height: 100%;
-            transform: scaleX(-1); /* Mirror the video and canvas */
         }
         video {
             display: none; /* Hidden, we draw to canvas */
@@ -172,7 +171,7 @@
             startTime: 0,
             animationFrameId: null,
             videoStream: null,
-            posenetModel: null,
+            detector: null,
             lastLogTime: 0
         };
 
@@ -188,14 +187,15 @@
          */
         async function setup() {
             initCharts();
-            console.log("Loading PoseNet...");
-            state.posenetModel = await posenet.load({
-                architecture: 'MobileNetV1',
-                outputStride: 16,
-                inputResolution: { width: 500, height: 500 },
-                multiplier: 0.75
-            });
-            console.log("PoseNet Loaded");
+            console.log("Loading MoveNet...");
+            const detectorConfig = {
+                modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+            };
+            state.detector = await poseDetection.createDetector(
+                poseDetection.SupportedModels.MoveNet, 
+                detectorConfig
+            );
+            console.log("MoveNet Loaded");
         }
 
         async function toggleDetection() {
@@ -235,7 +235,7 @@
                         const ctx = canvas.getContext('2d');
                         canvas.width = CONF.videoWidth;
                         canvas.height = CONF.videoHeight;
-                        detectPoseInRealTime(video, state.posenetModel, ctx);
+                        detectPoseInRealTime(video, state.detector, ctx);
                     };
                 } catch (e) {
                     console.error("Error starting video stream:", e);
@@ -248,7 +248,7 @@
         /**
          * MAIN LOOP
          */
-        function detectPoseInRealTime(video, net, ctx) {
+        function detectPoseInRealTime(video, detector, ctx) {
             async function poseDetectionFrame() {
                 if (!state.isDetecting) return;
 
@@ -257,19 +257,41 @@
                     return;
                 }
 
-                const pose = await net.estimateSinglePose(video, {
-                    flipHorizontal: false 
-                });
+                const poses = await detector.estimatePoses(video);
+                if (poses.length === 0) {
+                    state.animationFrameId = requestAnimationFrame(poseDetectionFrame);
+                    return;
+                }
+                
+                const pose = poses[0]; // Get first detected pose
 
                 const now = Date.now();
                 if (now - state.lastLogTime > 2000) {
                     console.log("Video readyState: ", video.readyState, " videoWidth: ", video.videoWidth, " videoHeight: ", video.videoHeight);
-                    console.log("Pose estimated: ", pose);
+                    console.log("Full pose object:", pose);
+                    
+                    // Log nose first (keypoint index 0 in MoveNet)
+                    const nose = pose.keypoints[0];
+                    if (nose) {
+                        console.log(`${nose.name}: score=${nose.score.toFixed(3)}, x=${Math.round(nose.x)}, y=${Math.round(nose.y)}`);
+                    }
+                    
+                    // Log top 3 highest scoring keypoints
+                    const sorted = [...pose.keypoints].sort((a, b) => b.score - a.score).slice(0, 3);
+                    sorted.forEach(kp => {
+                        console.log(`${kp.name}: score=${kp.score.toFixed(3)}, x=${Math.round(kp.x)}, y=${Math.round(kp.y)}`);
+                    });
+                    
                     state.lastLogTime = now;
                 }
 
                 ctx.clearRect(0, 0, CONF.videoWidth, CONF.videoHeight);
                 ctx.save();
+                
+                // Apply mirror transform in canvas context
+                ctx.scale(-1, 1);
+                ctx.translate(-CONF.videoWidth, 0);
+                
                 ctx.drawImage(video, 0, 0, CONF.videoWidth, CONF.videoHeight);
                 
                 drawKeypoints(pose.keypoints, CONF.minConfidence, ctx);
@@ -287,13 +309,14 @@
          * LOGIC: Angle Calculation & Squat State Machine
          */
         function processPose(pose) {
-            const rightHip = pose.keypoints.find(k => k.part === 'rightHip');
-            const rightKnee = pose.keypoints.find(k => k.part === 'rightKnee');
-            const rightAnkle = pose.keypoints.find(k => k.part === 'rightAnkle');
+            // MoveNet keypoint indices: 11=left_hip, 12=right_hip, 13=left_knee, 14=right_knee, 15=left_ankle, 16=right_ankle
+            const rightHip = pose.keypoints[12];
+            const rightKnee = pose.keypoints[14];
+            const rightAnkle = pose.keypoints[16];
             
-            const leftHip = pose.keypoints.find(k => k.part === 'leftHip');
-            const leftKnee = pose.keypoints.find(k => k.part === 'leftKnee');
-            const leftAnkle = pose.keypoints.find(k => k.part === 'leftAnkle');
+            const leftHip = pose.keypoints[11];
+            const leftKnee = pose.keypoints[13];
+            const leftAnkle = pose.keypoints[15];
 
             const rightConf = (rightHip.score + rightKnee.score + rightAnkle.score) / 3;
             const leftConf = (leftHip.score + leftKnee.score + leftAnkle.score) / 3;
@@ -308,7 +331,7 @@
                 return;
             }
 
-            const angle = calculateAngle(hip.position, knee.position, ankle.position);
+            const angle = calculateAngle({x: hip.x, y: hip.y}, {x: knee.x, y: knee.y}, {x: ankle.x, y: ankle.y});
             state.currentAngle = Math.round(angle);
 
             document.getElementById('angleDisplay').innerText = state.currentAngle;
@@ -466,14 +489,13 @@
         }
 
         /**
-         * DRAWING HELPERS (Standard PoseNet Utils)
+         * DRAWING HELPERS (MoveNet compatible)
          */
         function drawKeypoints(keypoints, minConfidence, ctx) {
             keypoints.forEach((keypoint) => {
                 if (keypoint.score >= minConfidence) {
-                    const { y, x } = keypoint.position;
                     ctx.beginPath();
-                    ctx.arc(x, y, 5, 0, 2 * Math.PI);
+                    ctx.arc(keypoint.x, keypoint.y, 5, 0, 2 * Math.PI);
                     ctx.fillStyle = '#00ffcc';
                     ctx.fill();
                 }
@@ -481,26 +503,27 @@
         }
 
         function drawSkeleton(keypoints, minConfidence, ctx) {
-            const adjacentKeyPoints = posenet.getAdjacentKeyPoints(keypoints, minConfidence);
-            adjacentKeyPoints.forEach((keypoints) => {
-                drawSegment(
-                    toTuple(keypoints[0].position), 
-                    toTuple(keypoints[1].position), 
-                    '#00ffcc', 
-                    ctx
-                );
+            // MoveNet skeleton connections
+            const connections = [
+                [0, 1], [0, 2], [1, 3], [2, 4], // face
+                [5, 6], [5, 7], [7, 9], [6, 8], [8, 10], // arms
+                [5, 11], [6, 12], [11, 12], // torso
+                [11, 13], [13, 15], [12, 14], [14, 16] // legs
+            ];
+            
+            connections.forEach(([i, j]) => {
+                const kp1 = keypoints[i];
+                const kp2 = keypoints[j];
+                
+                if (kp1.score >= minConfidence && kp2.score >= minConfidence) {
+                    ctx.beginPath();
+                    ctx.moveTo(kp1.x, kp1.y);
+                    ctx.lineTo(kp2.x, kp2.y);
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#00ffcc';
+                    ctx.stroke();
+                }
             });
-        }
-
-        function toTuple({ y, x }) { return [y, x]; }
-
-        function drawSegment([ay, ax], [by, bx], color, ctx) {
-            ctx.beginPath();
-            ctx.moveTo(ax, ay);
-            ctx.lineTo(bx, by);
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = color;
-            ctx.stroke();
         }
 
         // Start App
