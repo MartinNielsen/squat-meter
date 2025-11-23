@@ -131,18 +131,34 @@
             display: none;
         }
 
+        .stop-overlay {
+            display: flex;
+            gap: 10px;
+        }
+
         .stop-overlay button {
             padding: 8px 20px;
             font-size: 16px;
             cursor: pointer;
             border: none;
             border-radius: 4px;
-            background: #dc3545;
             color: white;
         }
 
-        .stop-overlay button:hover {
+        .stop-overlay button.stop-btn {
+            background: #dc3545;
+        }
+
+        .stop-overlay button.stop-btn:hover {
             background: #c82333;
+        }
+
+        .stop-overlay button.reset-btn {
+            background: #ffc107;
+        }
+
+        .stop-overlay button.reset-btn:hover {
+            background: #e0a800;
         }
 
         /* Layout for charts */
@@ -288,10 +304,11 @@
             <button onclick="toggleDetection()">Start</button>
         </div>
         <div class="stop-overlay hidden" id="stopOverlay">
-            <button onclick="toggleDetection()">Stop</button>
+            <button class="reset-btn" onclick="resetLiveData()">Reset</button>
+            <button class="stop-btn" onclick="toggleDetection()">Stop</button>
         </div>
         <div class="stats-overlay hidden" id="statsOverlay">
-            <div>Knee Angle: <span id="angleDisplay">0</span>°</div>
+            <div>Knee Angle: <span id="angleDisplay">0</span></div>
             <div>Status: <span id="statusDisplay">Standing</span></div>
             <div>Squats: <span id="countDisplay">0</span></div>
         </div>
@@ -368,6 +385,48 @@
         // Placeholder for chart instances
         let liveChart;
         let historyChart; 
+
+        /**
+         * RESET LIVE DATA
+         */
+        function resetLiveData() {
+            // Reset squat counting state
+            state.isSquatting = false;
+            state.squatCount = 0;
+            state.currentSquatData = [];
+            
+            // Update display
+            document.getElementById('countDisplay').innerText = '0';
+            document.getElementById('statusDisplay').innerText = 'Standing';
+            
+            // Clear the live chart
+            resetLiveChart();
+        }
+
+        /**
+         * AUDIO FEEDBACK
+         */
+        function playSquatCompleteSound() {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 800; // Frequency in Hz
+                oscillator.type = 'sine'; // Smooth sine wave
+                
+                gainNode.gain.setValueAtTime(0.1, audioContext.currentTime); // Low volume (discrete)
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.1); // Short 100ms beep
+            } catch (e) {
+                console.warn('Audio playback failed:', e);
+            }
+        }
 
         /**
          * INITIALIZATION
@@ -528,20 +587,27 @@
             const rightConf = (rightHip.score + rightKnee.score + rightAnkle.score) / 3;
             const leftConf = (leftHip.score + leftKnee.score + leftAnkle.score) / 3;
 
-            let hip, knee, ankle;
+            const usableThreshold = 0.28;
+            let hip, knee, ankle, confidence;
 
-            if (rightConf > leftConf && rightConf > CONF.minConfidence) {
+            if (rightConf > leftConf && rightConf >= usableThreshold) {
                 [hip, knee, ankle] = [rightHip, rightKnee, rightAnkle];
-            } else if (leftConf > CONF.minConfidence) {
+                confidence = rightConf;
+            } else if (leftConf >= usableThreshold) {
                 [hip, knee, ankle] = [leftHip, leftKnee, leftAnkle];
+                confidence = leftConf;
             } else {
+                // Data not usable - show placeholders
+                document.getElementById('angleDisplay').innerText = '-';
+                document.getElementById('angleDisplay').style.color = '#00ffcc';
+                document.getElementById('statusDisplay').innerText = '-';
                 return;
             }
 
             const angle = calculateAngle({x: hip.x, y: hip.y}, {x: knee.x, y: knee.y}, {x: ankle.x, y: ankle.y});
             state.currentAngle = Math.round(angle);
 
-            document.getElementById('angleDisplay').innerText = state.currentAngle;
+            document.getElementById('angleDisplay').innerText = state.currentAngle + '°';
             document.getElementById('angleDisplay').style.color = state.currentAngle < CONF.deepThresh ? '#00ff00' : '#00ffcc';
 
             const now = Date.now();
@@ -569,6 +635,7 @@
                     document.getElementById('countDisplay').innerText = state.squatCount;
                     
                     pushToHistory(state.currentSquatData);
+                    playSquatCompleteSound();
                 }
             }
         }

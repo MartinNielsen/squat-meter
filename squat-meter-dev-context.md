@@ -12,8 +12,8 @@ This is a single-page application (SPA) built with vanilla HTML, CSS, and JavaSc
 
 *   **HTML/CSS:** Provides the structure and styling for the user interface. The layout is responsive and designed to work on both desktop and mobile devices.
 *   **JavaScript (ES6+):** All application logic is contained within a single `<script>` tag in `index.html`. The code is organized into distinct functional sections.
-*   **TensorFlow.js:** The core machine learning library used to run the PoseNet model in the browser. It is loaded from a CDN.
-*   **PoseNet:** A pre-trained TensorFlow.js model for real-time human pose estimation. It takes a video frame as input and outputs the coordinates of key body joints.
+*   **TensorFlow.js:** The core machine learning library used to run the pose detection model in the browser. It is loaded from a CDN.
+*   **MoveNet:** A pre-trained TensorFlow.js model for real-time human pose estimation (upgraded from PoseNet). Uses the SINGLEPOSE_LIGHTNING variant for optimal performance. It takes a video frame as input and outputs the coordinates of key body joints.
 *   **Chart.js:** A charting library used to visualize the squat data. It provides a live graph of the current squat and historical graphs of previous squats.
 
 ## 3. Core Components and Logic
