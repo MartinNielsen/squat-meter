@@ -3,7 +3,15 @@
   "short_name": "Squat Meter",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#f0f2f5",
-  "theme_color": "#f0f2f5",
-  "description": "A squat counter and form analyzer using your webcam."
+  "background_color": "#007bff",
+  "theme_color": "#007bff",
+  "description": "A squat counter and form analyzer using your webcam.",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
 }

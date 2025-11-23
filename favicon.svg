@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <rect width="100" height="100" fill="#007bff"/>
+  <g transform="translate(50, 50)">
+    <!-- Simple stick figure in squat position -->
+    <!-- Head -->
+    <circle cx="0" cy="-25" r="8" fill="#fff"/>
+    <!-- Body -->
+    <line x1="0" y1="-17" x2="0" y2="0" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+    <!-- Arms -->
+    <line x1="0" y1="-10" x2="-15" y2="-5" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+    <line x1="0" y1="-10" x2="15" y2="-5" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+    <!-- Left leg (squatting) -->
+    <line x1="0" y1="0" x2="-8" y2="10" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+    <line x1="-8" y1="10" x2="-12" y2="20" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+    <!-- Right leg (squatting) -->
+    <line x1="0" y1="0" x2="8" y2="10" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+    <line x1="8" y1="10" x2="12" y2="20" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+    <!-- Angle indicator arc -->
+    <path d="M -5,8 A 8,8 0 0,1 5,8" fill="none" stroke="#00ffcc" stroke-width="2"/>
+  </g>
+</svg>
