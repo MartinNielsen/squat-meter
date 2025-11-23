@@ -23,6 +23,13 @@ jobs:
     - name: Setup Pages
       uses: actions/configure-pages@v4
       
+    - name: Inject deploy version
+      run: |
+        DEPLOY_VERSION=$(date -u +"%y%d%m%H%M")
+        echo "Deploying version: $DEPLOY_VERSION"
+        sed -i "s/__DEPLOY_VERSION__/$DEPLOY_VERSION/g" index.html
+      shell: bash
+      
     - name: Upload artifact
       uses: actions/upload-pages-artifact@v3
       with:
