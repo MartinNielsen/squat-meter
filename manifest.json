@@ -5,7 +5,7 @@
   "display": "standalone",
   "background_color": "#007bff",
   "theme_color": "#007bff",
-  "description": "A squat counter and form analyzer using your webcam.",
+  "description": "Free AI squat angle monitor and form tracker. Measure squat depth in real-time using your webcam.",
   "icons": [
     {
       "src": "app-icon.svg",

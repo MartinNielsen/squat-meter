@@ -9,7 +9,40 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-    <title>Squat Monitor - MoveNet</title>
+    <title>Squat Meter - AI Squat Angle Monitor & Form Tracker</title>
+    <meta name="description" content="Free online squat angle monitor and form tracker. Use your webcam to measure squat depth in real-time with AI. No equipment needed.">
+    <meta name="keywords" content="squat angle monitor, squat depth tracker, AI squat analysis, webcam fitness tool, powerlifting depth check, home workout assistant">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://squat-meter.com/">
+    <meta property="og:title" content="Squat Meter - AI Squat Angle Monitor">
+    <meta property="og:description" content="Real-time squat analysis using your webcam. Measure knee angles, count reps, and track depth automatically.">
+    <meta property="og:image" content="app-icon.svg">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:title" content="Squat Meter - AI Squat Angle Monitor">
+    <meta property="twitter:description" content="Real-time squat analysis using your webcam. Measure knee angles, count reps, and track depth automatically.">
+    <meta property="twitter:image" content="app-icon.svg">
+
+    <!-- JSON-LD Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Squat Meter",
+      "applicationCategory": "HealthApplication",
+      "operatingSystem": "Any",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "description": "A real-time AI squat angle monitor that uses your webcam to track squat depth and form.",
+      "featureList": "Real-time knee angle measurement, Squat repetition counting, Depth analysis, Privacy-focused (local processing)"
+    }
+    </script>
     
     <!-- Load TensorFlow.js -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
@@ -60,6 +93,15 @@
             letter-spacing: 0.08em;
             text-transform: uppercase;
             color: var(--md-primary-dark);
+        }
+
+        .header-subtitle {
+            font-size: 0.85rem;
+            color: var(--md-muted);
+            margin-top: 4px;
+            font-weight: 500;
+            line-height: 1.3;
+            max-width: 600px;
         }
 
         .header-container {
@@ -483,7 +525,10 @@
     <div class="version-tag">v.__DEPLOY_VERSION__</div>
     <div class="app-shell">
     <div class="header-container">
-        <h1>Squat Angle Monitor</h1>
+        <div>
+            <h1>Squat Angle Monitor</h1>
+            <div class="header-subtitle">Free AI Squat Angle Monitor. Track your squat depth and form in real-time using your webcam.</div>
+        </div>
     </div>
 
     <!-- Live Viewer -->
@@ -646,16 +691,8 @@
             const instructionScreen = document.getElementById('instructionScreen');
             const stopOverlay = document.getElementById('stopOverlay');
             const statsOverlay = document.getElementById('statsOverlay');
-            
-            // Ensure detector is loaded before starting
-            if (!state.isDetecting && !state.detector) {
-                console.warn("Detector not loaded yet, waiting...");
-                // Wait for detector to load
-                while (!state.detector) {
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                }
-                console.log("Detector ready!");
-            }
+            const loadingScreen = document.getElementById('loadingScreen');
+            const loadingText = document.getElementById('loadingText');
             
             if (state.isDetecting) {
                 // Stop detection
@@ -665,7 +702,7 @@
                 instructionScreen.classList.remove('hidden');
                 stopOverlay.classList.add('hidden');
                 statsOverlay.classList.add('hidden');
-                document.getElementById('loadingScreen').classList.add('hidden');
+                loadingScreen.classList.add('hidden');
                 if (state.animationFrameId) {
                     cancelAnimationFrame(state.animationFrameId);
                 }
@@ -676,27 +713,39 @@
                 const ctx = canvas.getContext('2d');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
             } else {
-                // Start detection
-                state.isDetecting = true;
-                document.getElementById('liveChartCard').classList.remove('hidden');
+                // Start detection - Immediate UI Feedback
                 instructionScreen.classList.add('hidden');
-                
-                // Show loading screen
-                const loadingScreen = document.getElementById('loadingScreen');
-                const loadingText = document.getElementById('loadingText');
                 loadingScreen.classList.remove('hidden');
-                loadingText.innerText = "Starting camera...";
+                loadingText.innerText = "Initializing AI Model...";
                 
+                // Reveal the live chart card immediately to ensure page is tall enough to scroll
+                document.getElementById('liveChartCard').classList.remove('hidden');
+
                 // Scroll to position viewer container just below the header
                 const headerContainer = document.querySelector('.header-container');
                 const rect = headerContainer.getBoundingClientRect();
                 const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-                const headerBottom = rect.bottom + scrollTop;
+                
+                // Scroll to the bottom of the header plus the gap (24px) + extra buffer
+                // This ensures the header and its shadow are completely scrolled out of view
+                const targetScroll = rect.bottom + scrollTop;
 
                 window.scrollTo({
-                    top: headerBottom + 1,
+                    top: targetScroll,
                     behavior: 'smooth'
                 });
+
+                // Ensure detector is loaded before proceeding
+                if (!state.detector) {
+                    console.warn("Detector not loaded yet, waiting...");
+                    while (!state.detector) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    console.log("Detector ready!");
+                }
+
+                state.isDetecting = true;
+                loadingText.innerText = "Starting camera...";
                 
                 const video = document.getElementById('video');
                 try {
