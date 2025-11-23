@@ -150,6 +150,40 @@
             display: none;
         }
 
+        .loading-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 6;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            backdrop-filter: blur(4px);
+        }
+
+        .loading-screen.hidden {
+            display: none;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--md-secondary);
+            animation: spin 1s ease-in-out infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
         .instruction-text {
             color: #fff;
             font-size: 1.1rem;
@@ -454,6 +488,10 @@
 
     <!-- Live Viewer -->
     <div class="viewer-container">
+        <div class="loading-screen hidden" id="loadingScreen">
+            <div class="spinner"></div>
+            <div id="loadingText">Initializing...</div>
+        </div>
         <div class="instruction-screen" id="instructionScreen">
             <div class="instruction-text">
                 Place the camera so it can see your full figure from the side. Then do your squat set.
@@ -627,6 +665,7 @@
                 instructionScreen.classList.remove('hidden');
                 stopOverlay.classList.add('hidden');
                 statsOverlay.classList.add('hidden');
+                document.getElementById('loadingScreen').classList.add('hidden');
                 if (state.animationFrameId) {
                     cancelAnimationFrame(state.animationFrameId);
                 }
@@ -641,14 +680,21 @@
                 state.isDetecting = true;
                 document.getElementById('liveChartCard').classList.remove('hidden');
                 instructionScreen.classList.add('hidden');
-                stopOverlay.classList.remove('hidden');
-                statsOverlay.classList.remove('hidden');
+                
+                // Show loading screen
+                const loadingScreen = document.getElementById('loadingScreen');
+                const loadingText = document.getElementById('loadingText');
+                loadingScreen.classList.remove('hidden');
+                loadingText.innerText = "Starting camera...";
                 
                 // Scroll to position viewer container just below the header
                 const headerContainer = document.querySelector('.header-container');
-                const headerBottom = headerContainer.offsetTop + headerContainer.offsetHeight;
+                const rect = headerContainer.getBoundingClientRect();
+                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                const headerBottom = rect.bottom + scrollTop;
+
                 window.scrollTo({
-                    top: headerBottom,
+                    top: headerBottom + 1,
                     behavior: 'smooth'
                 });
                 
@@ -663,6 +709,7 @@
                         }
                     });
                     video.srcObject = state.videoStream;
+                    loadingText.innerText = "Waiting for video stream...";
 
                     video.onloadedmetadata = () => {
                         CONF.videoWidth = video.videoWidth;
@@ -677,8 +724,7 @@
                     console.error("Error starting video stream:", e);
                     state.isDetecting = false;
                     instructionScreen.classList.remove('hidden');
-                    stopOverlay.classList.add('hidden');
-                    statsOverlay.classList.add('hidden');
+                    loadingScreen.classList.add('hidden');
                 }
             }
         }
@@ -693,6 +739,14 @@
                 if (video.readyState < 3) {
                     state.animationFrameId = requestAnimationFrame(poseDetectionFrame);
                     return;
+                }
+
+                // Hide loading screen if it's still visible and show overlays
+                const loadingScreen = document.getElementById('loadingScreen');
+                if (!loadingScreen.classList.contains('hidden')) {
+                    loadingScreen.classList.add('hidden');
+                    document.getElementById('stopOverlay').classList.remove('hidden');
+                    document.getElementById('statsOverlay').classList.remove('hidden');
                 }
 
                 const poses = await detector.estimatePoses(video);
