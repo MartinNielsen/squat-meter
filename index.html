@@ -24,7 +24,16 @@
             align-items: center;
         }
 
-        h1 { margin-bottom: 10px; }
+        h1 { margin-bottom: 5px; font-size: 1em; }
+
+        .header-container {
+            width: 100%;
+            max-width: 640px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
 
         /* Container for the live view */
         .viewer-container {
@@ -80,31 +89,123 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
 
-        .history-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
+        .history-viewer {
             margin-top: 20px;
+            display: block;
+        }
+
+        .history-viewer.hidden {
+            display: none;
+        }
+
+        .history-controls {
+            display: flex;
+            flex-direction: column-reverse;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .history-controls h4 {
+            margin: 0;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        .nav-buttons button, .delete-btn {
+            padding: 4px 10px;
+            font-size: 18px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background: #007bff;
+            color: white;
+            min-width: 36px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .nav-buttons button:hover, .delete-btn:hover {
+            background: #0056b3;
+        }
+
+        .nav-buttons button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .delete-btn {
+            background: #dc3545;
+        }
+
+        .delete-btn:hover {
+            background: #c82333;
+        }
+
+        .all-squats-grid {
+            display: none;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .all-squats-grid.visible {
+            display: grid;
+        }
+
+        .bottom-controls {
+            width: 100%;
+            max-width: 1000px;
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .bottom-controls button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background: #28a745;
+            color: white;
+        }
+
+        .bottom-controls button:hover {
+            background: #218838;
+        }
+
+        .bottom-controls button.delete-all {
+            background: #dc3545;
+        }
+
+        .bottom-controls button.delete-all:hover {
+            background: #c82333;
         }
 
         @media (max-width: 800px) {
             .viewer-container { width: 100%; height: auto; aspect-ratio: 4/3; }
             canvas#output { width: 100%; height: 100%; }
-            .history-grid { grid-template-columns: 1fr; }
+            .all-squats-grid { grid-template-columns: 1fr; }
         }
 
         .version {
-            position: absolute;
-            top: 5px;
-            right: 5px;
             font-size: 10px;
             color: #888;
         }
     </style>
 </head>
 <body>
-    <div class="version">v.1.0.1</div>
-    <h1>Squat Angle Monitor v.1.0.1</h1>
+    <div class="header-container">
+        <h1>Squat Angle Monitor</h1>
+        <div class="version">v.1.0.1</div>
+    </div>
     
     <button id="startStopButton">Start</button>
 
@@ -126,21 +227,28 @@
             <canvas id="liveChart"></canvas>
         </div>
 
-        <!-- History graphs -->
-        <div class="history-grid">
-            <div class="chart-card">
-                <h4 id="histChart3Title">Last Squat - 3</h4>
-                <canvas id="histChart3"></canvas>
+        <!-- Single History Viewer -->
+        <div class="chart-card history-viewer" id="historyViewer">
+            <div class="history-controls">
+                <h4 id="historyTitle">No Squats Recorded</h4>
+                <div class="nav-buttons">
+                    <button id="prevBtn" onclick="navigateHistory(-1)" title="Previous">⬆</button>
+                    <button id="nextBtn" onclick="navigateHistory(1)" title="Next">⬇</button>
+                    <button class="delete-btn" id="deleteBtn" onclick="deleteCurrentSquat()" title="Delete">🗑</button>
+                </div>
             </div>
-            <div class="chart-card">
-                <h4 id="histChart2Title">Last Squat - 2</h4>
-                <canvas id="histChart2"></canvas>
-            </div>
-            <div class="chart-card">
-                <h4 id="histChart1Title">Last Squat - 1 (Most Recent)</h4>
-                <canvas id="histChart1"></canvas>
-            </div>
+            <canvas id="historyChart"></canvas>
         </div>
+
+        <!-- All Squats Grid View -->
+        <div class="all-squats-grid" id="allSquatsGrid">
+        </div>
+    </div>
+
+    <!-- Bottom Controls -->
+    <div class="bottom-controls">
+        <button id="showAllBtn" onclick="toggleShowAll()">Show All</button>
+        <button class="delete-all" onclick="deleteAllSquats()">Delete All</button>
     </div>
 
     <script>
@@ -172,12 +280,15 @@
             animationFrameId: null,
             videoStream: null,
             detector: null,
-            lastLogTime: 0
+            lastLogTime: 0,
+            // History navigation
+            currentHistoryIndex: 0,
+            showAllView: false
         };
 
         // Placeholder for chart instances
         let liveChart;
-        const historyCharts = []; 
+        let historyChart; 
 
         const startStopButton = document.getElementById('startStopButton');
         startStopButton.onclick = toggleDetection;
@@ -384,8 +495,6 @@
          * CHARTING LOGIC
          */
         function initCharts() {
-            loadHistory();
-
             const commonOptions = {
                 responsive: true,
                 animation: false, 
@@ -411,18 +520,28 @@
                 options: commonOptions
             });
 
-            const ids = ['histChart1', 'histChart2', 'histChart3'];
-            ids.forEach((id) => {
-                const ctx = document.getElementById(id).getContext('2d');
-                historyCharts.push(new Chart(ctx, {
-                    type: 'line',
-                    data: { datasets: [{ label: 'Squat', data: [], borderColor: '#ff6384', tension: 0.1 }] },
-                    options: {
-                        ...commonOptions,
-                        scales: { y: { display: true, min: 0, max: 170 }, x: { display: true, type: 'linear', title: { display: true, text: 'Time (s)' } } }
-                    }
-                }));
+            const ctxHistory = document.getElementById('historyChart').getContext('2d');
+            historyChart = new Chart(ctxHistory, {
+                type: 'line',
+                data: { datasets: [{ label: 'Squat', data: [], borderColor: '#ff6384', tension: 0.1 }] },
+                options: {
+                    responsive: true,
+                    animation: false,
+                    scales: {
+                        y: { 
+                            title: { display: true, text: 'Angle (Degrees)' }
+                        },
+                        x: {
+                            type: 'linear',
+                            title: { display: true, text: 'Time (s)' }
+                        }
+                    },
+                    plugins: { legend: { display: false } }
+                }
             });
+
+            // Load history after all charts are initialized
+            loadHistory();
         }
 
         function updateLiveChart(time, angle) {
@@ -446,18 +565,16 @@
                 data: data
             });
 
-            if (historyData.length > 3) {
-                historyData.pop();
-            }
-
             saveHistoryData(historyData);
-            updateHistoryCharts(historyData);
+            state.currentHistoryIndex = 0; // Show the newly added squat
+            showHistorySquat(0);
         }
 
         function loadHistory() {
             const historyData = loadHistoryData();
-            if (historyData) {
-                updateHistoryCharts(historyData);
+            if (historyData && historyData.length > 0) {
+                state.currentHistoryIndex = 0;
+                showHistorySquat(0);
             }
         }
 
@@ -470,22 +587,197 @@
             localStorage.setItem('squatHistory', JSON.stringify(historyData));
         }
 
-        function updateHistoryCharts(historyData) {
-            const titleIds = ['histChart1Title', 'histChart2Title', 'histChart3Title'];
-            historyCharts.forEach((chart, i) => {
-                if (historyData[i]) {
-                    const date = new Date(historyData[i].timestamp);
-                    const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
-                    document.getElementById(titleIds[i]).innerText = `Squat - ${formattedDate}`;
-                    chart.data.datasets[0].data = historyData[i].data;
-                    chart.update();
-                } else {
-                    // Clear chart and reset title if no data
-                    document.getElementById(titleIds[i]).innerText = `Last Squat - ${i+1}`;
-                    chart.data.datasets[0].data = [];
-                    chart.update();
-                }
+        function showHistorySquat(index) {
+            const historyData = loadHistoryData() || [];
+            
+            if (historyData.length === 0) {
+                document.getElementById('historyTitle').innerText = 'No Squats Recorded';
+                document.getElementById('prevBtn').disabled = true;
+                document.getElementById('nextBtn').disabled = true;
+                document.getElementById('deleteBtn').disabled = true;
+                historyChart.data.datasets[0].data = [];
+                historyChart.update();
+                return;
+            }
+
+            if (index < 0 || index >= historyData.length) {
+                return;
+            }
+
+            state.currentHistoryIndex = index;
+            const squat = historyData[index];
+            const date = new Date(squat.timestamp);
+            const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+            
+            document.getElementById('historyTitle').innerText = `Squat ${index + 1} of ${historyData.length} - ${formattedDate}`;
+            document.getElementById('prevBtn').disabled = index === 0;
+            document.getElementById('nextBtn').disabled = index === historyData.length - 1;
+            document.getElementById('deleteBtn').disabled = false;
+
+            // Auto-scale the chart
+            const data = squat.data;
+            historyChart.data.datasets[0].data = data;
+            
+            if (data.length > 0) {
+                const yValues = data.map(d => d.y);
+                const xValues = data.map(d => d.x);
+                const yMin = Math.max(0, Math.min(...yValues) - 10);
+                const yMax = Math.min(180, Math.max(...yValues) + 10);
+                const xMin = 0;
+                const xMax = Math.max(...xValues) + 0.5;
+
+                historyChart.options.scales.y.min = yMin;
+                historyChart.options.scales.y.max = yMax;
+                historyChart.options.scales.x.min = xMin;
+                historyChart.options.scales.x.max = xMax;
+            }
+
+            historyChart.update();
+        }
+
+        function navigateHistory(direction) {
+            const historyData = loadHistoryData() || [];
+            const newIndex = state.currentHistoryIndex + direction;
+            
+            if (newIndex >= 0 && newIndex < historyData.length) {
+                showHistorySquat(newIndex);
+            }
+        }
+
+        function deleteCurrentSquat() {
+            const historyData = loadHistoryData() || [];
+            
+            if (historyData.length === 0) return;
+            
+            if (!confirm('Delete this squat recording?')) return;
+
+            historyData.splice(state.currentHistoryIndex, 1);
+            saveHistoryData(historyData);
+
+            // Show the same index (or previous if we deleted the last one)
+            if (state.currentHistoryIndex >= historyData.length) {
+                state.currentHistoryIndex = Math.max(0, historyData.length - 1);
+            }
+
+            if (historyData.length > 0) {
+                showHistorySquat(state.currentHistoryIndex);
+            } else {
+                showHistorySquat(0); // Will show "No Squats Recorded"
+            }
+
+            // Update all-squats view if it's visible
+            if (state.showAllView) {
+                renderAllSquats();
+            }
+        }
+
+        function toggleShowAll() {
+            state.showAllView = !state.showAllView;
+            const historyViewer = document.getElementById('historyViewer');
+            const allSquatsGrid = document.getElementById('allSquatsGrid');
+            const showAllBtn = document.getElementById('showAllBtn');
+
+            if (state.showAllView) {
+                historyViewer.classList.add('hidden');
+                allSquatsGrid.classList.add('visible');
+                showAllBtn.innerText = 'Show Navigator';
+                renderAllSquats();
+            } else {
+                historyViewer.classList.remove('hidden');
+                allSquatsGrid.classList.remove('visible');
+                showAllBtn.innerText = 'Show All';
+            }
+        }
+
+        function renderAllSquats() {
+            const historyData = loadHistoryData() || [];
+            const container = document.getElementById('allSquatsGrid');
+            container.innerHTML = '';
+
+            if (historyData.length === 0) {
+                container.innerHTML = '<p style="grid-column: 1/-1; text-align: center; padding: 20px;">No squats recorded yet</p>';
+                return;
+            }
+
+            historyData.forEach((squat, index) => {
+                const date = new Date(squat.timestamp);
+                const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+                
+                const card = document.createElement('div');
+                card.className = 'chart-card';
+                card.innerHTML = `
+                    <h4>Squat ${index + 1} - ${formattedDate}</h4>
+                    <canvas id="allSquatChart${index}"></canvas>
+                `;
+                container.appendChild(card);
+
+                // Create chart for this squat
+                setTimeout(() => {
+                    const ctx = document.getElementById(`allSquatChart${index}`).getContext('2d');
+                    const data = squat.data;
+                    
+                    let yMin = 0, yMax = 170, xMin = 0, xMax = 10;
+                    if (data.length > 0) {
+                        const yValues = data.map(d => d.y);
+                        const xValues = data.map(d => d.x);
+                        yMin = Math.max(0, Math.min(...yValues) - 10);
+                        yMax = Math.min(180, Math.max(...yValues) + 10);
+                        xMin = 0;
+                        xMax = Math.max(...xValues) + 0.5;
+                    }
+
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: { 
+                            datasets: [{ 
+                                label: 'Squat', 
+                                data: data, 
+                                borderColor: '#ff6384', 
+                                tension: 0.1 
+                            }] 
+                        },
+                        options: {
+                            responsive: true,
+                            animation: false,
+                            scales: {
+                                y: { 
+                                    min: yMin,
+                                    max: yMax,
+                                    title: { display: true, text: 'Angle (°)' }
+                                },
+                                x: {
+                                    type: 'linear',
+                                    min: xMin,
+                                    max: xMax,
+                                    title: { display: true, text: 'Time (s)' }
+                                }
+                            },
+                            plugins: { legend: { display: false } }
+                        }
+                    });
+                }, 0);
             });
+        }
+
+        function deleteAllSquats() {
+            const historyData = loadHistoryData() || [];
+            
+            if (historyData.length === 0) {
+                alert('No squats to delete');
+                return;
+            }
+
+            if (!confirm(`Delete all ${historyData.length} squat recordings? This cannot be undone.`)) {
+                return;
+            }
+
+            localStorage.removeItem('squatHistory');
+            state.currentHistoryIndex = 0;
+            showHistorySquat(0);
+
+            if (state.showAllView) {
+                renderAllSquats();
+            }
         }
 
         /**
