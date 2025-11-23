@@ -254,6 +254,15 @@
             border: 1px solid var(--md-outline);
         }
 
+        .chart-card.hidden {
+            display: none;
+        }
+
+        .show-all-card {
+            position: relative;
+            overflow: hidden;
+        }
+
         .chart-card h3 {
             margin: 0 0 12px;
             font-weight: 600;
@@ -285,12 +294,23 @@
             letter-spacing: 0.04em;
             color: var(--md-muted);
             font-weight: 500;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
         }
 
         .nav-buttons {
             display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            gap: 12px;
+        }
+
+        .nav-arrows {
+            display: flex;
             gap: 10px;
-            justify-content: flex-start;
         }
 
         .nav-buttons button,
@@ -327,6 +347,26 @@
             background: linear-gradient(135deg, var(--md-error), #7f1d1d);
             color: #fff;
             border: none;
+        }
+
+        .card-delete-btn {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            width: 40px;
+            height: 40px;
+            font-size: 0.9rem;
+            z-index: 2;
+            opacity: 0.95;
+            background: var(--md-surface);
+            color: var(--md-primary-dark);
+            border: 1px solid var(--md-outline);
+            box-shadow: 0 10px 24px rgba(15, 15, 15, 0.2);
+        }
+
+        .card-delete-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 26px rgba(15, 15, 15, 0.25);
         }
 
         .all-squats-grid {
@@ -435,7 +475,7 @@
 
     <div class="charts-wrapper">
         <!-- Real-time graph for current squat -->
-        <div class="chart-card">
+        <div class="chart-card hidden" id="liveChartCard">
             <h3>Current / Live Squat</h3>
             <canvas id="liveChart"></canvas>
         </div>
@@ -445,8 +485,10 @@
             <div class="history-controls">
                 <h4 id="historyTitle">No Squats Recorded</h4>
                 <div class="nav-buttons">
-                    <button id="prevBtn" onclick="navigateHistory(-1)" title="Previous">⬆</button>
-                    <button id="nextBtn" onclick="navigateHistory(1)" title="Next">⬇</button>
+                    <div class="nav-arrows">
+                        <button id="prevBtn" onclick="navigateHistory(-1)" title="Previous">⬆</button>
+                        <button id="nextBtn" onclick="navigateHistory(1)" title="Next">⬇</button>
+                    </div>
                     <button class="delete-btn" id="deleteBtn" onclick="deleteCurrentSquat()" title="Delete">🗑</button>
                 </div>
             </div>
@@ -579,7 +621,9 @@
             
             if (state.isDetecting) {
                 // Stop detection
+                saveCurrentSquatOnStop();
                 state.isDetecting = false;
+                document.getElementById('liveChartCard').classList.add('hidden');
                 instructionScreen.classList.remove('hidden');
                 stopOverlay.classList.add('hidden');
                 statsOverlay.classList.add('hidden');
@@ -595,6 +639,7 @@
             } else {
                 // Start detection
                 state.isDetecting = true;
+                document.getElementById('liveChartCard').classList.remove('hidden');
                 instructionScreen.classList.add('hidden');
                 stopOverlay.classList.remove('hidden');
                 statsOverlay.classList.remove('hidden');
@@ -847,6 +892,14 @@
             liveChart.update();
         }
 
+        function saveCurrentSquatOnStop() {
+            if (!state.isSquatting || state.currentSquatData.length === 0) return;
+
+            pushToHistory(state.currentSquatData);
+            state.isSquatting = false;
+            state.currentSquatData = [];
+        }
+
         function pushToHistory(data) {
             const historyData = loadHistoryData() || [];
 
@@ -900,12 +953,15 @@
             const day = String(date.getDate()).padStart(2, '0');
             const month = String(date.getMonth() + 1).padStart(2, '0');
             const year = String(date.getFullYear()).slice(-2);
-            const formattedDate = `${day}/${month}-${year}`;
+            const hour = String(date.getHours()).padStart(2, '0');
+            const minute = String(date.getMinutes()).padStart(2, '0');
+            const formattedDate = `${day}/${month}-${year} ${hour}:${minute}`;
             
             // Calculate min angle
             const minAngle = squat.data.length > 0 ? Math.round(Math.min(...squat.data.map(d => d.y))) : 0;
+            const entryNumber = historyData.length - index;
             
-            document.getElementById('historyTitle').innerHTML = `<span>Squat ${index + 1} ${formattedDate}</span><span>Min ${minAngle}°</span>`;
+            document.getElementById('historyTitle').innerHTML = `<span>Squat ${entryNumber} ${formattedDate}</span><span>Min ${minAngle}°</span>`;
             document.getElementById('prevBtn').disabled = index === 0;
             document.getElementById('nextBtn').disabled = index === historyData.length - 1;
             document.getElementById('deleteBtn').disabled = false;
@@ -941,27 +997,32 @@
         }
 
         function deleteCurrentSquat() {
+            deleteSquatAt(state.currentHistoryIndex);
+        }
+
+        function deleteSquatAt(index) {
             const historyData = loadHistoryData() || [];
-            
+
             if (historyData.length === 0) return;
-            
+            if (index < 0 || index >= historyData.length) return;
+
             if (!confirm('Delete this squat recording?')) return;
 
-            historyData.splice(state.currentHistoryIndex, 1);
+            historyData.splice(index, 1);
             saveHistoryData(historyData);
 
-            // Show the same index (or previous if we deleted the last one)
-            if (state.currentHistoryIndex >= historyData.length) {
-                state.currentHistoryIndex = Math.max(0, historyData.length - 1);
-            }
-
-            if (historyData.length > 0) {
-                showHistorySquat(state.currentHistoryIndex);
+            if (historyData.length === 0) {
+                state.currentHistoryIndex = 0;
+                showHistorySquat(0);
             } else {
-                showHistorySquat(0); // Will show "No Squats Recorded"
+                if (state.currentHistoryIndex >= historyData.length) {
+                    state.currentHistoryIndex = Math.max(0, historyData.length - 1);
+                } else if (index < state.currentHistoryIndex) {
+                    state.currentHistoryIndex = Math.max(0, state.currentHistoryIndex - 1);
+                }
+                showHistorySquat(state.currentHistoryIndex);
             }
 
-            // Update all-squats view if it's visible
             if (state.showAllView) {
                 renderAllSquats();
             }
@@ -978,7 +1039,7 @@
             if (state.showAllView) {
                 historyViewer.classList.add('hidden');
                 allSquatsGrid.classList.add('visible');
-                showAllBtn.innerText = 'Show Navigator';
+                showAllBtn.innerText = 'Show Last';
                 chartsWrapper.insertBefore(bottomControls, allSquatsGrid);
                 renderAllSquats();
             } else {
@@ -1004,15 +1065,19 @@
                 const day = String(date.getDate()).padStart(2, '0');
                 const month = String(date.getMonth() + 1).padStart(2, '0');
                 const year = String(date.getFullYear()).slice(-2);
-                const formattedDate = `${day}/${month}-${year}`;
+                const hour = String(date.getHours()).padStart(2, '0');
+                const minute = String(date.getMinutes()).padStart(2, '0');
+                const formattedDate = `${day}/${month}-${year} ${hour}:${minute}`;
                 
                 // Calculate min angle
                 const minAngle = squat.data.length > 0 ? Math.round(Math.min(...squat.data.map(d => d.y))) : 0;
                 
+                const entryNumber = historyData.length - index;
                 const card = document.createElement('div');
-                card.className = 'chart-card';
+                card.className = 'chart-card show-all-card';
                 card.innerHTML = `
-                    <h4 style="font-size: 0.9em; display: flex; justify-content: space-between; align-items: center; margin-top: 0.33em; margin-bottom: 0.5em;"><span>Squat ${index + 1} ${formattedDate}</span><span>Min ${minAngle}°</span></h4>
+                    <button class="delete-btn card-delete-btn" title="Delete this squat" onclick="deleteSquatAt(${index})">🗑</button>
+                    <h4 style="font-size: 0.9em; display: flex; justify-content: space-between; align-items: center; margin-top: 0.33em; margin-bottom: 0.5em;"><span>Squat ${entryNumber} ${formattedDate}</span><span>Min ${minAngle}°</span></h4>
                     <canvas id="allSquatChart${index}"></canvas>
                 `;
                 container.appendChild(card);
