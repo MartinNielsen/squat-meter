@@ -605,6 +605,8 @@
             deepThresh: 100,  // Just for visual feedback on deep squats
         };
 
+        const SHOW_ALL_PREF_KEY = 'squatShowMode';
+
         /**
          * STATE MANAGEMENT
          */
@@ -1132,7 +1134,13 @@
         }
 
         function toggleShowAll() {
-            state.showAllView = !state.showAllView;
+            const nextMode = !state.showAllView;
+            state.showAllView = nextMode;
+            saveShowModePreference(nextMode);
+            applyShowModePreference();
+        }
+
+        function applyShowModePreference() {
             const historyViewer = document.getElementById('historyViewer');
             const allSquatsGrid = document.getElementById('allSquatsGrid');
             const showAllBtn = document.getElementById('showAllBtn');
@@ -1150,6 +1158,25 @@
                 allSquatsGrid.classList.remove('visible');
                 showAllBtn.innerText = 'Show All';
                 chartsWrapper.parentNode.insertBefore(bottomControls, chartsWrapper.nextSibling);
+            }
+        }
+
+        function saveShowModePreference(value) {
+            try {
+                localStorage.setItem(SHOW_ALL_PREF_KEY, value ? 'true' : 'false');
+            } catch (e) {
+                console.warn('Could not persist show mode preference:', e);
+            }
+        }
+
+        function restoreShowModePreference() {
+            try {
+                const stored = localStorage.getItem(SHOW_ALL_PREF_KEY);
+                if (stored === null) return;
+                state.showAllView = stored === 'true';
+                applyShowModePreference();
+            } catch (e) {
+                console.warn('Could not load show mode preference:', e);
             }
         }
 
@@ -1294,6 +1321,7 @@
 
         // Start App
         setup();
+        restoreShowModePreference();
 
     </script>
     <script>
