@@ -1,21 +1,59 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect width="100" height="100" fill="#007bff"/>
-  <g transform="translate(50, 50)">
-    <!-- Simple stick figure in squat position -->
-    <!-- Head -->
-    <circle cx="0" cy="-25" r="8" fill="#fff"/>
-    <!-- Body -->
-    <line x1="0" y1="-17" x2="0" y2="0" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-    <!-- Arms -->
-    <line x1="0" y1="-10" x2="-15" y2="-5" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-    <line x1="0" y1="-10" x2="15" y2="-5" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-    <!-- Left leg (squatting) -->
-    <line x1="0" y1="0" x2="-8" y2="10" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-    <line x1="-8" y1="10" x2="-12" y2="20" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-    <!-- Right leg (squatting) -->
-    <line x1="0" y1="0" x2="8" y2="10" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-    <line x1="8" y1="10" x2="12" y2="20" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-    <!-- Angle indicator arc -->
-    <path d="M -5,8 A 8,8 0 0,1 5,8" fill="none" stroke="#00ffcc" stroke-width="2"/>
-  </g>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 512 512"
+   fill="none"
+   stroke-linecap="round"
+   stroke-linejoin="round"
+   version="1.1"
+   id="svg2"
+   sodipodi:docname="favicon.svg"
+   inkscape:version="1.4.2 (f4327f4, 2025-05-13)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs2" />
+  <sodipodi:namedview
+     id="namedview2"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="1.6699219"
+     inkscape:cx="256"
+     inkscape:cy="256"
+     inkscape:window-width="1920"
+     inkscape:window-height="1057"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg2" />
+  <!-- Head: Shifted slightly left to balance the center of gravity -->
+  <circle
+     cx="200"
+     cy="110"
+     r="55"
+     stroke="#2c3e50"
+     stroke-width="40"
+     id="circle1" />
+  <!-- Body Path: 
+       Spine (leaning forward) -> Hip -> Knee (extended out) -> Ankle -> Foot -->
+  <path
+     d="M200 165 L170 280 L380 280 L210 420 L300 420"
+     stroke="#2c3e50"
+     stroke-width="40"
+     id="path1" />
+  <!-- The Angle Monitor: Located behind the knee -->
+  <!-- Indicates the flexion angle between thigh and calf -->
+  <path
+     d="m 228.21442,309.70141 a 41.824334,49.315137 0 0 0 12.5473,49.31514"
+     stroke="#e74c3c"
+     stroke-width="22.7078"
+     opacity="1"
+     id="path2"
+     style="stroke-linecap:square;paint-order:normal" />
 </svg>
