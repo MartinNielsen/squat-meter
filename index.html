@@ -127,6 +127,10 @@
             display: none;
         }
 
+        .stats-overlay.hidden {
+            display: none;
+        }
+
         .stop-overlay button {
             padding: 8px 20px;
             font-size: 16px;
@@ -286,7 +290,7 @@
         <div class="stop-overlay hidden" id="stopOverlay">
             <button onclick="toggleDetection()">Stop</button>
         </div>
-        <div class="stats-overlay">
+        <div class="stats-overlay hidden" id="statsOverlay">
             <div>Knee Angle: <span id="angleDisplay">0</span>°</div>
             <div>Status: <span id="statusDisplay">Standing</span></div>
             <div>Squats: <span id="countDisplay">0</span></div>
@@ -384,11 +388,16 @@
         async function toggleDetection() {
             const instructionScreen = document.getElementById('instructionScreen');
             const stopOverlay = document.getElementById('stopOverlay');
+            const statsOverlay = document.getElementById('statsOverlay');
             
             // Ensure detector is loaded before starting
             if (!state.isDetecting && !state.detector) {
-                console.warn("Detector not loaded yet, please wait...");
-                return;
+                console.warn("Detector not loaded yet, waiting...");
+                // Wait for detector to load
+                while (!state.detector) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                console.log("Detector ready!");
             }
             
             if (state.isDetecting) {
@@ -396,6 +405,7 @@
                 state.isDetecting = false;
                 instructionScreen.classList.remove('hidden');
                 stopOverlay.classList.add('hidden');
+                statsOverlay.classList.add('hidden');
                 if (state.animationFrameId) {
                     cancelAnimationFrame(state.animationFrameId);
                 }
@@ -410,6 +420,7 @@
                 state.isDetecting = true;
                 instructionScreen.classList.add('hidden');
                 stopOverlay.classList.remove('hidden');
+                statsOverlay.classList.remove('hidden');
                 const video = document.getElementById('video');
                 try {
                     state.videoStream = await navigator.mediaDevices.getUserMedia({
@@ -436,6 +447,7 @@
                     state.isDetecting = false;
                     instructionScreen.classList.remove('hidden');
                     stopOverlay.classList.add('hidden');
+                    statsOverlay.classList.add('hidden');
                 }
             }
         }
