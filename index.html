@@ -195,6 +195,12 @@
 
         .history-controls h4 {
             margin: 0;
+            font-size: 0.9em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 0.33em;
+            margin-bottom: 0.5em;
         }
 
         .nav-buttons {
@@ -770,9 +776,15 @@
             state.currentHistoryIndex = index;
             const squat = historyData[index];
             const date = new Date(squat.timestamp);
-            const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = String(date.getFullYear()).slice(-2);
+            const formattedDate = `${day}/${month}-${year}`;
             
-            document.getElementById('historyTitle').innerText = `Squat ${index + 1} of ${historyData.length} - ${formattedDate}`;
+            // Calculate min angle
+            const minAngle = squat.data.length > 0 ? Math.round(Math.min(...squat.data.map(d => d.y))) : 0;
+            
+            document.getElementById('historyTitle').innerHTML = `<span>Squat ${index + 1} ${formattedDate}</span><span>Min ${minAngle}°</span>`;
             document.getElementById('prevBtn').disabled = index === 0;
             document.getElementById('nextBtn').disabled = index === historyData.length - 1;
             document.getElementById('deleteBtn').disabled = false;
@@ -864,12 +876,18 @@
 
             historyData.forEach((squat, index) => {
                 const date = new Date(squat.timestamp);
-                const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+                const day = String(date.getDate()).padStart(2, '0');
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const year = String(date.getFullYear()).slice(-2);
+                const formattedDate = `${day}/${month}-${year}`;
+                
+                // Calculate min angle
+                const minAngle = squat.data.length > 0 ? Math.round(Math.min(...squat.data.map(d => d.y))) : 0;
                 
                 const card = document.createElement('div');
                 card.className = 'chart-card';
                 card.innerHTML = `
-                    <h4>Squat ${index + 1} - ${formattedDate}</h4>
+                    <h4 style="font-size: 0.9em; display: flex; justify-content: space-between; align-items: center; margin-top: 0.33em; margin-bottom: 0.5em;"><span>Squat ${index + 1} ${formattedDate}</span><span>Min ${minAngle}°</span></h4>
                     <canvas id="allSquatChart${index}"></canvas>
                 `;
                 container.appendChild(card);
