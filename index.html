@@ -867,16 +867,20 @@
             const historyViewer = document.getElementById('historyViewer');
             const allSquatsGrid = document.getElementById('allSquatsGrid');
             const showAllBtn = document.getElementById('showAllBtn');
+            const bottomControls = document.querySelector('.bottom-controls');
+            const chartsWrapper = document.querySelector('.charts-wrapper');
 
             if (state.showAllView) {
                 historyViewer.classList.add('hidden');
                 allSquatsGrid.classList.add('visible');
                 showAllBtn.innerText = 'Show Navigator';
+                chartsWrapper.insertBefore(bottomControls, allSquatsGrid);
                 renderAllSquats();
             } else {
                 historyViewer.classList.remove('hidden');
                 allSquatsGrid.classList.remove('visible');
                 showAllBtn.innerText = 'Show All';
+                chartsWrapper.parentNode.insertBefore(bottomControls, chartsWrapper.nextSibling);
             }
         }
 
