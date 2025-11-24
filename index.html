@@ -1051,7 +1051,7 @@
         }
 
         function pushToHistory(data) {
-            const historyData = loadHistoryData() || [];
+            const historyData = loadAllHistoryData() || [];
 
             historyData.unshift({
                 timestamp: new Date().toISOString(),
@@ -1075,7 +1075,7 @@
             const jsonData = localStorage.getItem('squatHistory');
             const allData = jsonData ? JSON.parse(jsonData) : null;
             // Filter out deleted squats for display
-            return allData ? allData.filter(squat => !squat.deleted) : null;
+            return allData ? allData.filter(squat => squat.deleted !== true) : null;
         }
 
         function loadAllHistoryData() {
@@ -1407,12 +1407,14 @@
         function permanentlyDeleteMarkedSquats() {
             // Remove squats that are marked as deleted
             const allData = loadAllHistoryData() || [];
-            const cleanedData = allData.filter(squat => !squat.deleted);
+            const cleanedData = allData.filter(squat => squat.deleted !== true);
             saveHistoryData(cleanedData);
 
             // Refresh view
             const historyData = loadHistoryData() || [];
-            if (state.currentHistoryIndex >= historyData.length && historyData.length > 0) {
+            if (historyData.length === 0) {
+                state.currentHistoryIndex = 0;
+            } else if (state.currentHistoryIndex >= historyData.length) {
                 state.currentHistoryIndex = historyData.length - 1;
             }
             showHistorySquat(state.currentHistoryIndex);
