@@ -50,6 +50,9 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
     <!-- Load Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Load Ionicons -->
+    <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+    <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
 
     <style>
         :root {
@@ -519,10 +522,62 @@
             pointer-events: none;
             z-index: 0;
         }
+
+        .undo-button {
+            position: fixed;
+            bottom: 32px;
+            right: 32px;
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: var(--md-secondary);
+            color: #042f2e;
+            border: none;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 18px 40px rgba(3, 218, 198, 0.5);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            z-index: 100;
+        }
+
+        .undo-button ion-icon {
+            font-size: 32px;
+            --ionicon-stroke-width: 48px;
+        }
+
+        .undo-button.visible {
+            display: flex;
+        }
+
+        .undo-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 22px 48px rgba(3, 218, 198, 0.6);
+        }
+
+        @media (max-width: 800px) {
+            .undo-button {
+                bottom: 20px;
+                right: 20px;
+                width: 56px;
+                height: 56px;
+            }
+            
+            .undo-button ion-icon {
+                font-size: 28px;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="version-tag">v.__DEPLOY_VERSION__</div>
+    
+    <!-- Floating Undo Button -->
+    <button class="undo-button" id="undoButton" onclick="undoDelete()" title="Undo Delete">
+        <ion-icon name="arrow-undo-outline"></ion-icon>
+    </button>
+    
     <div class="app-shell">
     <div class="header-container">
         <div>
@@ -624,7 +679,9 @@
             lastLogTime: 0,
             // History navigation
             currentHistoryIndex: 0,
-            showAllView: false
+            showAllView: false,
+            // Undo functionality
+            undoTimerId: null
         };
 
         // Placeholder for chart instances
@@ -1006,7 +1063,7 @@
         }
 
         function pushToHistory(data) {
-            const historyData = loadHistoryData() || [];
+            const historyData = loadAllHistoryData() || [];
 
             historyData.unshift({
                 timestamp: new Date().toISOString(),
@@ -1027,6 +1084,14 @@
         }
 
         function loadHistoryData() {
+            const jsonData = localStorage.getItem('squatHistory');
+            const allData = jsonData ? JSON.parse(jsonData) : null;
+            // Filter out deleted squats for display
+            return allData ? allData.filter(squat => squat.deleted !== true) : null;
+        }
+
+        function loadAllHistoryData() {
+            // Load all data including deleted squats (for internal operations)
             const jsonData = localStorage.getItem('squatHistory');
             return jsonData ? JSON.parse(jsonData) : null;
         }
@@ -1111,17 +1176,35 @@
             if (historyData.length === 0) return;
             if (index < 0 || index >= historyData.length) return;
 
-            if (!confirm('Delete this squat recording?')) return;
+            // Mark squat as deleted instead of removing it
+            const allData = loadAllHistoryData() || [];
+            // Find the actual index in the full array (including deleted)
+            let actualIndex = 0;
+            let visibleIndex = 0;
+            for (let i = 0; i < allData.length; i++) {
+                if (!allData[i].deleted) {
+                    if (visibleIndex === index) {
+                        actualIndex = i;
+                        break;
+                    }
+                    visibleIndex++;
+                }
+            }
 
-            historyData.splice(index, 1);
-            saveHistoryData(historyData);
+            allData[actualIndex].deleted = true;
+            saveHistoryData(allData);
 
-            if (historyData.length === 0) {
+            // Show undo button and start timer
+            showUndoButton();
+
+            // Update view
+            const newHistoryData = loadHistoryData() || [];
+            if (newHistoryData.length === 0) {
                 state.currentHistoryIndex = 0;
                 showHistorySquat(0);
             } else {
-                if (state.currentHistoryIndex >= historyData.length) {
-                    state.currentHistoryIndex = Math.max(0, historyData.length - 1);
+                if (state.currentHistoryIndex >= newHistoryData.length) {
+                    state.currentHistoryIndex = Math.max(0, newHistoryData.length - 1);
                 } else if (index < state.currentHistoryIndex) {
                     state.currentHistoryIndex = Math.max(0, state.currentHistoryIndex - 1);
                 }
@@ -1268,14 +1351,85 @@
                 return;
             }
 
-            if (!confirm(`Delete all ${historyData.length} squat recordings? This cannot be undone.`)) {
-                return;
-            }
+            // Mark all squats as deleted
+            const allData = loadAllHistoryData() || [];
+            allData.forEach(squat => {
+                squat.deleted = true;
+            });
+            saveHistoryData(allData);
 
-            localStorage.removeItem('squatHistory');
+            // Show undo button and start timer
+            showUndoButton();
+
             state.currentHistoryIndex = 0;
             showHistorySquat(0);
 
+            if (state.showAllView) {
+                renderAllSquats();
+            }
+        }
+
+        /**
+         * UNDO FUNCTIONALITY
+         */
+        function showUndoButton() {
+            const undoButton = document.getElementById('undoButton');
+            undoButton.classList.add('visible');
+
+            // Clear any existing timer
+            if (state.undoTimerId) {
+                clearTimeout(state.undoTimerId);
+            }
+
+            // Set new timer for 6 seconds
+            state.undoTimerId = setTimeout(() => {
+                hideUndoButton();
+                permanentlyDeleteMarkedSquats();
+            }, 6000);
+        }
+
+        function hideUndoButton() {
+            const undoButton = document.getElementById('undoButton');
+            undoButton.classList.remove('visible');
+            
+            if (state.undoTimerId) {
+                clearTimeout(state.undoTimerId);
+                state.undoTimerId = null;
+            }
+        }
+
+        function undoDelete() {
+            // Restore all deleted squats
+            const allData = loadAllHistoryData() || [];
+            allData.forEach(squat => {
+                squat.deleted = false;
+            });
+            saveHistoryData(allData);
+
+            // Hide undo button
+            hideUndoButton();
+
+            // Refresh view
+            showHistorySquat(state.currentHistoryIndex);
+            if (state.showAllView) {
+                renderAllSquats();
+            }
+        }
+
+        function permanentlyDeleteMarkedSquats() {
+            // Remove squats that are marked as deleted
+            const allData = loadAllHistoryData() || [];
+            const cleanedData = allData.filter(squat => squat.deleted !== true);
+            saveHistoryData(cleanedData);
+
+            // Refresh view
+            const historyData = loadHistoryData() || [];
+            if (historyData.length === 0) {
+                state.currentHistoryIndex = 0;
+            } else if (state.currentHistoryIndex >= historyData.length) {
+                state.currentHistoryIndex = historyData.length - 1;
+            }
+            showHistorySquat(state.currentHistoryIndex);
             if (state.showAllView) {
                 renderAllSquats();
             }
